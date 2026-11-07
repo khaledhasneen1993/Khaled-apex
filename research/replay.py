@@ -73,6 +73,7 @@ class Replay:
         self.last_prices, self.last_rejections = {}, {}
         self.config_hash = engine.cfg.fingerprint
         self.exposure_ms = self.missing = self.funding_events = 0
+        self.feed_resets = {}
 
     def apply(self, row):
         now, symbol, kind, data = (row[k] for k in ("received_ms", "symbol", "kind", "data"))
@@ -91,6 +92,8 @@ class Replay:
             self.next_batch = now+self.engine.cfg.rank_window_ms
             return
         cfg = self.engine.cfg
+        if kind in ("reset_depth", "reset_market"):
+            self.feed_resets[symbol] = self.feed_resets.get(symbol, 0)+1
         try:
             if kind == "funding_settlement":
                 self.funding(symbol, now, data)
@@ -163,8 +166,7 @@ class Replay:
                 rejected.append((symbol, "SIGNAL_EXPIRES_BEFORE_LATENCY"))
                 continue
             p = decision.plan
-            adverse_notional = p.notional*(1+cfg.max_slippage)
-            reserve = max(p.margin, adverse_notional/cfg.leverage)+adverse_notional*cfg.fee
+            reserve = self.orders.required_margin(decision, cfg)
             if margin+self.orders.margin+reserve > self.balance:
                 rejected.append((symbol, "INSUFFICIENT_UNRESERVED_MARGIN"))
                 continue
@@ -349,7 +351,7 @@ class Replay:
         ) for symbol, state in self.states.items()}
         return dict(fidelity="public_event_shadow", config=self.config_hash, missing_events=self.missing,
                     safety_state="ready" if feeds and all(x["data_ready"] for x in feeds.values()) else "degraded",
-                    feed_health=feeds, model_version=self.engine.model.version if self.engine.model else None,
+                    feed_health=feeds, feed_resets=dict(self.feed_resets), model_version=self.engine.model.version if self.engine.model else None,
                     funding_settlements=self.funding_events, elapsed_ms=elapsed,
                     latency_ms=self.latency, stress_slippage=self.stress,
                     execution_experiment=vars(self.experiment), partial_entries=self.partial_entries,

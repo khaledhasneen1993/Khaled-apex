@@ -471,7 +471,9 @@ class DurableExecution:
             current_ids = set(self.intents) - previous_ids
             symbol_scoped = False
             reducing = bool((params or {}).get('reduceOnly'))
-            if isinstance(error, OrderValidationError) and not current_ids and not reducing:
+            rejected_before_send = (self.execution_stage == 'entry_post' and current_ids
+                                    and all(self.intents[cid]['status'] == 'rejected' for cid in current_ids))
+            if isinstance(error, OrderValidationError) and not reducing and (not current_ids or rejected_before_send):
                 self.journal.log('entry_validation_blocked', symbol=symbol, stage='before_post',
                     error_type=type_name(error), reason=str(error), recovery_action='no_order_sent')
                 raise

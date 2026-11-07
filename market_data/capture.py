@@ -79,12 +79,22 @@ def write_batch(stream, rows):
     stream.flush()
 
 
+async def verify_clock(session):
+    before = time.time_ns()//1_000_000
+    result = await get(session, "/fapi/v1/time")
+    after = time.time_ns()//1_000_000
+    server = result.get("serverTime")
+    if type(server) is not int or not 0 <= after-before <= 1500 or abs(server-(before+after)//2) > 750:
+        raise ValueError("PUBLIC_MARKET_CLOCK_UNVERIFIED")
+
+
 async def stream(symbols, consumer, *, seconds=None):
     """Deliver ordered public events in bounded batches to a single consumer."""
     import aiohttp
     queue = asyncio.Queue(maxsize=2000)
     timeout = aiohttp.ClientTimeout(total=12)
     async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
+        await verify_clock(session)
         async with asyncio.TaskGroup() as group:
             tasks = [group.create_task(produce(session, symbol, feed, queue))
                      for symbol in symbols for feed in ("depth", "market")]

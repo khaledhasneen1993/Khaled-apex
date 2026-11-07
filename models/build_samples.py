@@ -76,7 +76,7 @@ class SampleBuilder:
         else:
             return None
         asof = d.signal.asof_ms
-        return Sample(asof, asof, now, list(d.model_inputs), result)
+        return Sample(asof, asof, now, list(d.model_inputs), result, d.data_provenance)
 
 
 def main():

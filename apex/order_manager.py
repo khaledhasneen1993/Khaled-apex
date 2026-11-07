@@ -24,16 +24,20 @@ class OrderManager:
     def exposures(self, excluding=None):
         return [o.decision.exposure for o in self.pending.values() if o is not excluding]
 
+    @staticmethod
+    def required_margin(decision, cfg):
+        p = decision.plan
+        adverse_notional = p.notional*(1+cfg.max_slippage)
+        return max(p.margin, adverse_notional/cfg.leverage)+adverse_notional*cfg.fee
+
     def reserve(self, decision, now, latency, cfg):
         symbol = decision.signal.symbol
         if symbol in self.pending:
             raise ValueError("Symbol already reserved")
         self.sequence += 1
-        p = decision.plan
-        adverse_notional = p.notional*(1+cfg.max_slippage)
         order = PendingEntry(f"apex-{self.sequence:010d}", decision, now+latency,
                              decision.signal.asof_ms+cfg.max_age_ms,
-                             max(p.margin, adverse_notional/cfg.leverage)+adverse_notional*cfg.fee)
+                             self.required_margin(decision, cfg))
         self.pending[symbol] = order
         self.log(order, now, "INTENT")
         return order

@@ -15,12 +15,13 @@ import httpx
 from infra.journal import atomic_json
 from risk.config import load_config
 
-async def collect(hours):
+async def collect(hours, *, qualification=False):
     cfg = load_config()
     root = Path(cfg['exchange']['state_dir']) / 'testnet'
     root.mkdir(parents=True, exist_ok=True)
+    prefix = 'apex_qualification_soak' if qualification else 'soak'
     report = {'status':'running', 'started_at':datetime.now(timezone.utc).isoformat(),
-              'required_hours':hours, 'samples':0, 'unavailable_samples':0, 'restarts':0,
+              'required_hours':hours, 'samples':0, 'qualification':qualification, 'unsafe_samples':0, 'unavailable_samples':0, 'restarts':0,
               'max_memory_bytes':0, 'max_open_fds':0, 'max_health_latency_ms':0}
     started = time.monotonic()
     previous_uptime = None
@@ -34,6 +35,18 @@ async def collect(hours):
                     sample = response.json()
                     if sample.get('mode') != 'testnet' or sample['kill_switch']['mode'] != 'soft':
                         raise ValueError('Soak requires the Demo entry-blocking process')
+                    if qualification:
+                        identity = (sample.get('profile'), sample.get('approval_fingerprint'), sample.get('session_id'))
+                        if identity[0] != 'apex-qualification' or not all(identity[1:]):
+                            raise ValueError('Soak requires the Apex qualification profile')
+                        if 'session_id' not in report:
+                            report.update(session_id=identity[2], approval_fingerprint=identity[1],
+                                          initial_closed_trades=sample.get('closed_trades', 0))
+                        if identity[1:] != (report['approval_fingerprint'], report['session_id']):
+                            raise ValueError('Qualification session changed')
+                        if (sample.get('status') != 'healthy' or sample.get('missing_native_stops') != 0
+                                or sample.get('unresolved_execution') is not False):
+                            report['unsafe_samples'] += 1
                     latency = (time.monotonic() - tick) * 1000
                     if previous_uptime is not None and sample['uptime_sec'] < previous_uptime: report['restarts'] += 1
                     previous_uptime = sample['uptime_sec']
@@ -42,28 +55,32 @@ async def collect(hours):
                         max_memory_bytes=max(report['max_memory_bytes'], sample.get('memory_bytes', 0)),
                         max_open_fds=max(report['max_open_fds'], sample.get('open_fds', 0)),
                         max_health_latency_ms=max(report['max_health_latency_ms'], latency))
-                    with (root / 'soak_samples.jsonl').open('a') as stream:
+                    with (root / (prefix+'_samples.jsonl')).open('a') as stream:
                         stream.write(json.dumps({'timestamp':datetime.now(timezone.utc).isoformat(), **sample})+'\n')
                 except (httpx.HTTPError, ValueError, KeyError): report['unavailable_samples'] += 1
                 report['elapsed_hours'] = (time.monotonic() - started) / 3600
-                atomic_json(root / 'soak_report.json', report)
+                atomic_json(root / (prefix+'_report.json'), report)
                 await asyncio.sleep(10)
     finally:
         report['elapsed_hours'] = (time.monotonic() - started) / 3600
         complete = report['elapsed_hours'] >= hours and hours >= 72
-        report['status'] = 'passed' if (complete and report['samples'] > 0 and not report['unavailable_samples']
+        if qualification:
+            report['closed_trade_delta'] = report.get('last_health', {}).get('closed_trades', 0)-report.get('initial_closed_trades', 0)
+        report['status'] = 'passed' if (complete and not report['unsafe_samples']
+            and (not qualification or report['closed_trade_delta'] > 0) and report['samples'] > 0 and not report['unavailable_samples']
             and not report['restarts'] and report['max_memory_bytes'] <= cfg['process']['max_memory_gb'] * 1e9
             and report['max_open_fds'] <= cfg['process']['max_fds'] and report['max_health_latency_ms'] < 100) else 'pending' if not complete else 'failed'
         report['finished_at'] = datetime.now(timezone.utc).isoformat()
-        atomic_json(root / 'soak_report.json', report)
+        atomic_json(root / (prefix+'_report.json'), report)
         print(json.dumps(report, indent=2))
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--hours', type=float, default=72)
+    p.add_argument('--qualification', action='store_true')
     args = p.parse_args()
     if args.hours <= 0: p.error('--hours must be positive')
-    try: asyncio.run(collect(args.hours))
+    try: asyncio.run(collect(args.hours, qualification=args.qualification))
     except KeyboardInterrupt: pass
 
 if __name__ == '__main__': main()

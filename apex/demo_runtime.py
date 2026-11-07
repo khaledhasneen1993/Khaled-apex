@@ -6,6 +6,7 @@ import time
 
 from apex.demo_execution import ApexDemoExchange, require_demo_release
 from apex.engine import Engine
+from apex.qualification import DAILY_LOSS, preflight
 from binance_cascade_hunter_dynamic_v2_paper import V2PaperHunter
 from exchange.quantity import OrderValidationError
 from journal.wal import WriteAheadLog, load_durable
@@ -19,8 +20,10 @@ from risk.apex_exit import Exit
 class ApexDemoRuntime(V2PaperHunter):
     live_exchange = ApexDemoExchange
 
-    def __init__(self, config, instruments, *args, **kwargs):
-        require_demo_release()
+    def __init__(self, config, instruments, *args, approval=None, **kwargs):
+        if approval is None:
+            require_demo_release()
+        self.approval = approval
         if not 1 <= len(instruments) <= 8 or any(not SYMBOL.fullmatch(s) for s in instruments):
             raise ValueError("Apex Demo requires filters for one to eight USD-M symbols")
         self.apex_config = config
@@ -31,6 +34,9 @@ class ApexDemoRuntime(V2PaperHunter):
         super().__init__(*args, **kwargs)
         if self.execution_mode != "testnet":
             raise ValueError("ApexDemoRuntime requires Demo")
+        if approval is not None:
+            self.safety.kill.cfg["daily_dd_limit_pct"] = DAILY_LOSS
+            self.safety.kill.cfg["daily_drawdown_action"] = "block_entries"
         self.high_path = self.state_path.parent/"apex-high-water.json"
         stored = load_durable(self.high_path)
         if stored:
@@ -46,10 +52,17 @@ class ApexDemoRuntime(V2PaperHunter):
 
     async def start(self):
         try:
-            require_demo_release()
-            position_mode = await self.exchange._request("GET", "/fapi/v1/positionSide/dual", retry=True)
-            if position_mode.get("dualSidePosition") is not False:
-                raise ValueError("Apex Demo requires confirmed One-way Mode")
+            if self.approval is None:
+                require_demo_release()
+            self.approval.check_entry()
+            if self.exchange.fence is None:
+                raise ValueError("ACCOUNT_FENCE_NOT_CONFIGURED")
+            await preflight(self.exchange, self.engine.instruments, expected_alias=self.approval.account_alias)
+            if self.positions or self.safety.kill.blocks_entries or self.safety.storage_failed:
+                raise ValueError("LOCAL_ACCOUNT_STATE_REQUIRES_REVIEW")
+            await self.exchange.fence.acquire()
+            self.exchange.qualification_symbols = tuple(self.engine.instruments)
+            await preflight(self.exchange, self.engine.instruments, expected_alias=self.approval.account_alias)
         except BaseException:
             await self.exchange.close()
             raise

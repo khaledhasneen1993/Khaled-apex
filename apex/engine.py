@@ -34,6 +34,7 @@ class Decision:
     model: str | None
     model_inputs: tuple | None = None
     score_kind: str = "HEURISTIC_SCORE"
+    data_provenance: dict | None = None
 
 
 class Engine:
@@ -90,7 +91,11 @@ class Engine:
                     candidate = Candidate(signal, edge, slippage, abs(order.stop-f.price)/f.price, corr, f.depth_usdt)
                     proposals.append((candidate, Decision(signal, order, exposure, edge, slippage,
                                                           self.model.version if self.model else None, inputs,
-                                                          "MODEL_RESEARCH_SCORE" if self.model else "HEURISTIC_SCORE")))
+                                                          ("CALIBRATED_MODEL_SCORE" if getattr(self.model, "calibrated", False)
+                                                           else "MODEL_RESEARCH_SCORE") if self.model else "HEURISTIC_SCORE",
+                                                          dict(event_ms=f.observed_ms, book_received_ms=state.book.received_ms,
+                                                               available_ms=now, funding_missing=f.funding is None,
+                                                               oi_missing=f.oi_change is None, btc_missing=f.btc_momentum is None))))
                 except ValueError as error:
                     rejected.append((symbol, str(error)))
         indexed = {candidate: decision for candidate, decision in proposals}

@@ -34,10 +34,11 @@ class Model:
     scales: list
     weights: list
     temperature: float
+    calibrated: bool = False
 
     def __post_init__(self):
         n = len(FEATURES)
-        if (not self.version or len(self.means) != n or len(self.scales) != n
+        if (type(self.calibrated) is not bool or not self.version or len(self.means) != n or len(self.scales) != n
                 or len(self.weights) != len(LABELS) or any(len(w) != n+1 for w in self.weights)
                 or not all(isfinite(v) for v in [*self.means, *self.scales, self.temperature,
                                                  *(v for row in self.weights for v in row)])

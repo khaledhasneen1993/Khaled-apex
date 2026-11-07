@@ -12,13 +12,14 @@ from paper_account import Position
 from portfolio.limits import check, risk_multiplier
 from risk.liq_math import validate_stop_against_liq
 
-DEMO_BLOCKERS = ("DEMO_PREFLIGHT_PENDING", "DEMO_SOAK_PENDING", "STRATEGY_EDGE_UNPROVEN")
+from .qualification import DAILY_LOSS, RELEASE_BLOCKERS, fingerprint, preflight
+from .order_authorization import EntryOrder, check_entry
+
+DEMO_BLOCKERS = ("DEMO_PREFLIGHT_PENDING", *RELEASE_BLOCKERS)
 
 
 def require_demo_release():
-    # Release engineering must promote this code after obtaining operational
-    # evidence. A local setting or model approval alone cannot unlock this build.
-    raise ValueError("Apex Demo release blocked: "+", ".join(DEMO_BLOCKERS))
+    raise ValueError("Apex Demo operational release blocked: "+", ".join(DEMO_BLOCKERS))
 
 
 class ApexDemoExchange(LiveExchange):
@@ -28,9 +29,60 @@ class ApexDemoExchange(LiveExchange):
         super().__init__(*args, **kwargs)
         self.apex_lock = asyncio.Lock()
         self.apex_book = None
+        self.apex_max_age = 0
+        self.approval = self.fence = None
+        self.qualification_symbols = ()
+        self.approved_order = None
 
     def authorize_apex_entry(self):
-        require_demo_release()
+        if self.approval is None or self.fence is None:
+            require_demo_release()
+        self.approval.check_entry()
+
+    async def before_mutation(self, method, path, params):
+        if self.fence is None:
+            # Unconfigured real clients cannot reach any mutation. The normal
+            # operational release is unavailable; tests inject their own fence.
+            raise OrderValidationError("ACCOUNT_FENCE_NOT_CONFIGURED")
+        try:
+            await self.fence.check()
+        except ValueError as exc:
+            raise OrderValidationError(str(exc)) from None
+        if (self.approval is not None and path == "/fapi/v1/order"
+                and method == "POST" and params.get("type") == "LIMIT"):
+            order = self.approved_order
+            if (order is None or params.get("symbol") != order.symbol
+                    or params.get("side") != order.side.upper() or params.get("price") != order.limit
+                    or params.get("quantity") != order.quantity or params.get("timeInForce") != "IOC"):
+                raise OrderValidationError("ORDER_PAYLOAD_CHANGED_AFTER_APPROVAL")
+            self.authorize_apex_entry()
+            await self.refresh_account()
+            if (self.positions or await self.get_open_orders()
+                    or order.account_version != self.account_version()):
+                raise OrderValidationError("ACCOUNT_CHANGED_AT_SEND")
+            if not self.apex_book or not self.apex_book.fresh(time.time_ns()//1_000_000, self.apex_max_age):
+                raise OrderValidationError("MARKET_EXPIRED_AT_SEND")
+            # Recheck ownership after the account and market checks.
+            try:
+                await self.fence.check()
+            except ValueError as exc:
+                raise OrderValidationError(str(exc)) from None
+            if not self.apex_book.fresh(time.time_ns()//1_000_000, self.apex_max_age):
+                raise OrderValidationError("MARKET_EXPIRED_AT_SEND")
+
+    async def close(self):
+        try:
+            if self.fence is not None and self.qualification_symbols:
+                try:
+                    await preflight(self, self.qualification_symbols, expected_alias=self.approval.account_alias)
+                    await self.fence.release()
+                except Exception:
+                    self.journal.log("qualification_fence_retained", reason="flat_reconciled_state_unproven")
+        finally:
+            await super().close()
+
+    def account_version(self):
+        return fingerprint(dict(equity=self.equity, free=self.free, used=self.used, positions=self.positions))
 
     def validate_entry_submission(self, symbol, options):
         self.authorize_apex_entry()
@@ -45,6 +97,7 @@ class ApexDemoExchange(LiveExchange):
     async def enter_apex(self, decision, cfg, supervisor, *, market_state, exposures, high_water, correlated):
         async with self.apex_lock:
             self.apex_book = market_state.book
+            self.apex_max_age = cfg.max_age_ms
             try:
                 return await self._enter_apex(decision, cfg, supervisor, exposures, high_water, correlated)
             finally:
@@ -72,6 +125,8 @@ class ApexDemoExchange(LiveExchange):
         adverse = signal.reference*(1+cfg.max_slippage)
         if decision.plan.quantity*adverse*(1/cfg.leverage+self.fee_rate) > self.free:
             raise OrderValidationError("Insufficient available margin")
+        if self.approval is not None and exposures:
+            raise OrderValidationError("QUALIFICATION_SINGLE_POSITION_LIMIT")
         brackets = await self.leverage_brackets(symbol)
         sign = 1 if signal.side == "buy" else -1
         limit = self._price(symbol, signal.reference*(1+sign*cfg.max_slippage), round_up=sign < 0)
@@ -95,12 +150,41 @@ class ApexDemoExchange(LiveExchange):
         maximum = await self.set_leverage(cfg.leverage, symbol)
         if amount*adverse > maximum:
             raise OrderValidationError("Apex order exceeds confirmed leverage bracket")
+        if self.approval is not None:
+            await self.refresh_account()
+            if self.positions or await self.get_open_orders():
+                raise OrderValidationError("ACCOUNT_CHANGED_BEFORE_SUBMISSION")
+            if not await supervisor.allow_entry(symbol, signal.side, signal.reference):
+                raise OrderValidationError("SAFETY_CHANGED_BEFORE_SUBMISSION")
+            kill = supervisor.kill
+            start = kill.day_start_equity
+            if start is None or not isfinite(start) or start <= 0:
+                raise OrderValidationError("DAILY_START_EQUITY_UNAVAILABLE")
+            headroom = start*DAILY_LOSS + min(0., self.equity-start, kill.state.daily_pnl)
+            planned["budget"] = min(risk, headroom, self.equity*cfg.risk_fraction*
+                                    risk_multiplier(self.equity, high_water, cfg))
+            if planned["budget"] <= 0:
+                raise OrderValidationError("DAILY_RISK_LIMIT")
+            order = EntryOrder(signal.symbol, signal.side, self.amount_to_precision(symbol, amount),
+                               "LIMIT_IOC", limit, planned["stop"], planned["target"], planned["budget"],
+                               cfg.leverage, self.approval.digest, signal.strategy, 1, self.account_version())
+            reasons = check_entry(order, self.apex_book, time.time_ns()//1_000_000, signal.asof_ms,
+                                  cfg.max_age_ms, cfg.max_spread, self.equity, self.free, self.fee_rate)
+            if reasons:
+                self.journal.log("apex_risk_block", symbol=symbol, report={"reasons": reasons})
+                raise OrderValidationError(reasons[0])
+            if not self.journal.log("apex_risk_pass", symbol=symbol, report={"fingerprint": order.digest,
+                                    "strategy": signal.strategy, "budget": order.risk_budget}):
+                raise OrderValidationError("RISK_APPROVAL_JOURNAL_UNAVAILABLE")
+            planned["order_fingerprint"] = order.digest
+            self.approved_order = order
         self.selected_leverage[symbol] = dict(leverage=cfg.leverage, amount=amount, confirmed=True,
                                               entry_order_valid=True)
         try:
             return await self.create_order(symbol, "market", signal.side, amount, options)
         finally:
             self.selected_leverage.pop(symbol, None)
+            self.approved_order = None
 
     def build_entry_position(self, side, price, quantity, leverage, atr, risk_cfg,
                              equity, options, **metadata):
@@ -134,6 +218,12 @@ class ApexDemoExchange(LiveExchange):
         if type != "market" or options.get("reduceOnly") or not options.get("apex_plan"):
             return await super().submit_order(symbol, type, side, amount, params)
         self.validate_entry_submission(symbol, options)
+        order = self.approved_order
+        if self.approval is not None and (order is None or options["apex_plan"].get("order_fingerprint") != order.digest
+                or order.account_version != self.account_version()
+                or options["apex_plan"]["stop"] != order.stop or options["apex_plan"]["target"] != order.target
+                or options["apex_plan"]["budget"] != order.risk_budget):
+            raise OrderValidationError("ORDER_APPROVAL_STALE_OR_CHANGED")
         quantity = self.amount_to_precision(symbol, amount)
         limit = options["apex_plan"]["limit"]
         validate_quantity(self.market(symbol), quantity, limit)

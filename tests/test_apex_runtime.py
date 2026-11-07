@@ -122,6 +122,7 @@ async def test_apex_demo_adapter_reuses_durable_intent_and_native_protection(liv
     live.cfg["leverage"] = 10
     exchange = ApexDemoExchange(live.cfg, SimpleNamespace(acquire=AsyncMock()))
     exchange.markets = live.markets
+    exchange.fence = SimpleNamespace(check=AsyncMock())
     server = SimulatedBinance()
     server.wallet = 1000.
     posts = []

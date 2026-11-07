@@ -19,3 +19,4 @@ journal/*.log
 !.env.example
 
 .venv-paper-dashboard/
+.hypothesis/

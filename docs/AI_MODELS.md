@@ -1,0 +1,12 @@
+# نماذج Meta-Decision
+
+النموذج الأولي Multinomial Logistic Regression بإعدادات بسيطة واستدلال Python. اخترناه لسهولة تدقيق المعاملات ولتقليل تبعيات Termux. المخرجات احتمالات الهدف والوقف وانتهاء المهلة. تعبر مؤشرات missing عن غياب التمويل أو open interest أو سياق BTC. فشل الاستدلال يرفض الإشارة. تحقق المحفظة والحجم مستقل عن النموذج.
+
+`models.labels.label` يصنّف أول حاجز قابل للتنفيذ بعد القرار، ويستبعد المسارات ذات الفجوات. يتطلب CLI عينات JSONL تحتوي `decision_ms` و`features_ms` و`label_end_ms` و`row` و`label`. إنتاج سجل عينات سوق موسوم بالكامل يتطلب أحداثًا فعلية وخصائص لحظة القرار.
+
+```bash
+python -m models.train samples.jsonl model.json --version candidate-1 \
+  --calibration-ms CALIBRATION_START --test-ms TEST_START --embargo-ms EMBARGO
+```
+
+يقصّ split التداخل بين نهاية نتيجة التدريب وبداية calibration/test، ويخرج Brier وreliability bins من البيانات المحجوزة. `walk_forward` يكرر تقسيمًا أماميًا على حدود يحددها الباحث. التدريب لا يكتب موافقة. يتطلب تحميل النموذج في Replay ملف موافقة مع `artifact_sha256` و`config_sha256` و`approved_by` و`scope: shadow`. الرجوع يكون باختيار الملف والموافقة السابقين. تدريب LightGBM/CatBoost ومقارنتهما والنموذج المعتمد معلقة على بيانات كافية.

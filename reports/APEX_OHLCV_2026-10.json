@@ -1,0 +1,853 @@
+{
+  "fidelity": "ohlcv_prefilter_proxy",
+  "from_utc": "2026-10-22",
+  "markets": {
+    "BTCUSDT-1m-2026-10": {
+      "candles": 43200,
+      "gaps": [
+        {
+          "after": "2026-10-27T23:59:00+00:00",
+          "before": "2026-10-29T00:00:00+00:00",
+          "missing_bars": 1440
+        }
+      ],
+      "segments": [
+        {
+          "start": "2026-10-22T00:00:00+00:00",
+          "end": "2026-10-27T23:59:00+00:00",
+          "variants": [
+            {
+              "candidate_bars": 0,
+              "end_open": false,
+              "modeled_wallet": 100.0,
+              "marked_equity": 100.0,
+              "metrics": {
+                "trades": 0,
+                "net_pnl": 0,
+                "expectancy": null,
+                "profit_factor": null,
+                "max_drawdown": 0.0,
+                "sharpe": null,
+                "sortino": null,
+                "win_rate": null,
+                "average_win": null,
+                "average_loss": null,
+                "tail_loss": null,
+                "mean_entry_slippage": null
+              },
+              "assumptions": {
+                "initial_equity": 100.0,
+                "stop_pct": 0.08,
+                "trail_arm": 0.015,
+                "trail_distance": 0.006,
+                "fee": 0.0005,
+                "slippage_per_fill": 0.0005,
+                "notional": 100.0,
+                "funding": "unavailable",
+                "fill_timing": "next_bar_open"
+              }
+            },
+            {
+              "candidate_bars": 0,
+              "end_open": false,
+              "modeled_wallet": 100.0,
+              "marked_equity": 100.0,
+              "metrics": {
+                "trades": 0,
+                "net_pnl": 0,
+                "expectancy": null,
+                "profit_factor": null,
+                "max_drawdown": 0.0,
+                "sharpe": null,
+                "sortino": null,
+                "win_rate": null,
+                "average_win": null,
+                "average_loss": null,
+                "tail_loss": null,
+                "mean_entry_slippage": null
+              },
+              "assumptions": {
+                "initial_equity": 100.0,
+                "stop_pct": 0.04,
+                "trail_arm": 0.015,
+                "trail_distance": 0.006,
+                "fee": 0.0005,
+                "slippage_per_fill": 0.0005,
+                "notional": 100.0,
+                "funding": "unavailable",
+                "fill_timing": "next_bar_open"
+              }
+            },
+            {
+              "candidate_bars": 0,
+              "end_open": false,
+              "modeled_wallet": 100.0,
+              "marked_equity": 100.0,
+              "metrics": {
+                "trades": 0,
+                "net_pnl": 0,
+                "expectancy": null,
+                "profit_factor": null,
+                "max_drawdown": 0.0,
+                "sharpe": null,
+                "sortino": null,
+                "win_rate": null,
+                "average_win": null,
+                "average_loss": null,
+                "tail_loss": null,
+                "mean_entry_slippage": null
+              },
+              "assumptions": {
+                "initial_equity": 100.0,
+                "stop_pct": 0.02,
+                "trail_arm": 0.015,
+                "trail_distance": 0.006,
+                "fee": 0.0005,
+                "slippage_per_fill": 0.0005,
+                "notional": 100.0,
+                "funding": "unavailable",
+                "fill_timing": "next_bar_open"
+              }
+            }
+          ]
+        },
+        {
+          "start": "2026-10-29T00:00:00+00:00",
+          "end": "2026-10-31T23:59:00+00:00",
+          "variants": [
+            {
+              "candidate_bars": 0,
+              "end_open": false,
+              "modeled_wallet": 100.0,
+              "marked_equity": 100.0,
+              "metrics": {
+                "trades": 0,
+                "net_pnl": 0,
+                "expectancy": null,
+                "profit_factor": null,
+                "max_drawdown": 0.0,
+                "sharpe": null,
+                "sortino": null,
+                "win_rate": null,
+                "average_win": null,
+                "average_loss": null,
+                "tail_loss": null,
+                "mean_entry_slippage": null
+              },
+              "assumptions": {
+                "initial_equity": 100.0,
+                "stop_pct": 0.08,
+                "trail_arm": 0.015,
+                "trail_distance": 0.006,
+                "fee": 0.0005,
+                "slippage_per_fill": 0.0005,
+                "notional": 100.0,
+                "funding": "unavailable",
+                "fill_timing": "next_bar_open"
+              }
+            },
+            {
+              "candidate_bars": 0,
+              "end_open": false,
+              "modeled_wallet": 100.0,
+              "marked_equity": 100.0,
+              "metrics": {
+                "trades": 0,
+                "net_pnl": 0,
+                "expectancy": null,
+                "profit_factor": null,
+                "max_drawdown": 0.0,
+                "sharpe": null,
+                "sortino": null,
+                "win_rate": null,
+                "average_win": null,
+                "average_loss": null,
+                "tail_loss": null,
+                "mean_entry_slippage": null
+              },
+              "assumptions": {
+                "initial_equity": 100.0,
+                "stop_pct": 0.04,
+                "trail_arm": 0.015,
+                "trail_distance": 0.006,
+                "fee": 0.0005,
+                "slippage_per_fill": 0.0005,
+                "notional": 100.0,
+                "funding": "unavailable",
+                "fill_timing": "next_bar_open"
+              }
+            },
+            {
+              "candidate_bars": 0,
+              "end_open": false,
+              "modeled_wallet": 100.0,
+              "marked_equity": 100.0,
+              "metrics": {
+                "trades": 0,
+                "net_pnl": 0,
+                "expectancy": null,
+                "profit_factor": null,
+                "max_drawdown": 0.0,
+                "sharpe": null,
+                "sortino": null,
+                "win_rate": null,
+                "average_win": null,
+                "average_loss": null,
+                "tail_loss": null,
+                "mean_entry_slippage": null
+              },
+              "assumptions": {
+                "initial_equity": 100.0,
+                "stop_pct": 0.02,
+                "trail_arm": 0.015,
+                "trail_distance": 0.006,
+                "fee": 0.0005,
+                "slippage_per_fill": 0.0005,
+                "notional": 100.0,
+                "funding": "unavailable",
+                "fill_timing": "next_bar_open"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "DOGEUSDT-1m-2026-10": {
+      "candles": 43200,
+      "gaps": [
+        {
+          "after": "2026-10-27T23:59:00+00:00",
+          "before": "2026-10-29T00:00:00+00:00",
+          "missing_bars": 1440
+        }
+      ],
+      "segments": [
+        {
+          "start": "2026-10-22T00:00:00+00:00",
+          "end": "2026-10-27T23:59:00+00:00",
+          "variants": [
+            {
+              "candidate_bars": 0,
+              "end_open": false,
+              "modeled_wallet": 100.0,
+              "marked_equity": 100.0,
+              "metrics": {
+                "trades": 0,
+                "net_pnl": 0,
+                "expectancy": null,
+                "profit_factor": null,
+                "max_drawdown": 0.0,
+                "sharpe": null,
+                "sortino": null,
+                "win_rate": null,
+                "average_win": null,
+                "average_loss": null,
+                "tail_loss": null,
+                "mean_entry_slippage": null
+              },
+              "assumptions": {
+                "initial_equity": 100.0,
+                "stop_pct": 0.08,
+                "trail_arm": 0.015,
+                "trail_distance": 0.006,
+                "fee": 0.0005,
+                "slippage_per_fill": 0.0005,
+                "notional": 100.0,
+                "funding": "unavailable",
+                "fill_timing": "next_bar_open"
+              }
+            },
+            {
+              "candidate_bars": 0,
+              "end_open": false,
+              "modeled_wallet": 100.0,
+              "marked_equity": 100.0,
+              "metrics": {
+                "trades": 0,
+                "net_pnl": 0,
+                "expectancy": null,
+                "profit_factor": null,
+                "max_drawdown": 0.0,
+                "sharpe": null,
+                "sortino": null,
+                "win_rate": null,
+                "average_win": null,
+                "average_loss": null,
+                "tail_loss": null,
+                "mean_entry_slippage": null
+              },
+              "assumptions": {
+                "initial_equity": 100.0,
+                "stop_pct": 0.04,
+                "trail_arm": 0.015,
+                "trail_distance": 0.006,
+                "fee": 0.0005,
+                "slippage_per_fill": 0.0005,
+                "notional": 100.0,
+                "funding": "unavailable",
+                "fill_timing": "next_bar_open"
+              }
+            },
+            {
+              "candidate_bars": 0,
+              "end_open": false,
+              "modeled_wallet": 100.0,
+              "marked_equity": 100.0,
+              "metrics": {
+                "trades": 0,
+                "net_pnl": 0,
+                "expectancy": null,
+                "profit_factor": null,
+                "max_drawdown": 0.0,
+                "sharpe": null,
+                "sortino": null,
+                "win_rate": null,
+                "average_win": null,
+                "average_loss": null,
+                "tail_loss": null,
+                "mean_entry_slippage": null
+              },
+              "assumptions": {
+                "initial_equity": 100.0,
+                "stop_pct": 0.02,
+                "trail_arm": 0.015,
+                "trail_distance": 0.006,
+                "fee": 0.0005,
+                "slippage_per_fill": 0.0005,
+                "notional": 100.0,
+                "funding": "unavailable",
+                "fill_timing": "next_bar_open"
+              }
+            }
+          ]
+        },
+        {
+          "start": "2026-10-29T00:00:00+00:00",
+          "end": "2026-10-31T23:59:00+00:00",
+          "variants": [
+            {
+              "candidate_bars": 3,
+              "end_open": false,
+              "modeled_wallet": 100.76628444352647,
+              "marked_equity": 100.76628444352647,
+              "metrics": {
+                "trades": 1,
+                "net_pnl": 0.7662844435264737,
+                "expectancy": 0.7662844435264737,
+                "profit_factor": null,
+                "max_drawdown": 0.008478846721539526,
+                "sharpe": null,
+                "sortino": null,
+                "win_rate": 1.0,
+                "average_win": 0.7662844435264737,
+                "average_loss": null,
+                "tail_loss": 0.7662844435264737,
+                "mean_entry_slippage": 0.0005
+              },
+              "assumptions": {
+                "initial_equity": 100.0,
+                "stop_pct": 0.08,
+                "trail_arm": 0.015,
+                "trail_distance": 0.006,
+                "fee": 0.0005,
+                "slippage_per_fill": 0.0005,
+                "notional": 100.0,
+                "funding": "unavailable",
+                "fill_timing": "next_bar_open"
+              }
+            },
+            {
+              "candidate_bars": 3,
+              "end_open": false,
+              "modeled_wallet": 100.76628444352647,
+              "marked_equity": 100.76628444352647,
+              "metrics": {
+                "trades": 1,
+                "net_pnl": 0.7662844435264737,
+                "expectancy": 0.7662844435264737,
+                "profit_factor": null,
+                "max_drawdown": 0.008478846721539526,
+                "sharpe": null,
+                "sortino": null,
+                "win_rate": 1.0,
+                "average_win": 0.7662844435264737,
+                "average_loss": null,
+                "tail_loss": 0.7662844435264737,
+                "mean_entry_slippage": 0.0005
+              },
+              "assumptions": {
+                "initial_equity": 100.0,
+                "stop_pct": 0.04,
+                "trail_arm": 0.015,
+                "trail_distance": 0.006,
+                "fee": 0.0005,
+                "slippage_per_fill": 0.0005,
+                "notional": 100.0,
+                "funding": "unavailable",
+                "fill_timing": "next_bar_open"
+              }
+            },
+            {
+              "candidate_bars": 3,
+              "end_open": false,
+              "modeled_wallet": 100.76628444352647,
+              "marked_equity": 100.76628444352647,
+              "metrics": {
+                "trades": 1,
+                "net_pnl": 0.7662844435264737,
+                "expectancy": 0.7662844435264737,
+                "profit_factor": null,
+                "max_drawdown": 0.008478846721539526,
+                "sharpe": null,
+                "sortino": null,
+                "win_rate": 1.0,
+                "average_win": 0.7662844435264737,
+                "average_loss": null,
+                "tail_loss": 0.7662844435264737,
+                "mean_entry_slippage": 0.0005
+              },
+              "assumptions": {
+                "initial_equity": 100.0,
+                "stop_pct": 0.02,
+                "trail_arm": 0.015,
+                "trail_distance": 0.006,
+                "fee": 0.0005,
+                "slippage_per_fill": 0.0005,
+                "notional": 100.0,
+                "funding": "unavailable",
+                "fill_timing": "next_bar_open"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "ETHUSDT-1m-2026-10": {
+      "candles": 43200,
+      "gaps": [
+        {
+          "after": "2026-10-27T23:59:00+00:00",
+          "before": "2026-10-29T00:00:00+00:00",
+          "missing_bars": 1440
+        }
+      ],
+      "segments": [
+        {
+          "start": "2026-10-22T00:00:00+00:00",
+          "end": "2026-10-27T23:59:00+00:00",
+          "variants": [
+            {
+              "candidate_bars": 0,
+              "end_open": false,
+              "modeled_wallet": 100.0,
+              "marked_equity": 100.0,
+              "metrics": {
+                "trades": 0,
+                "net_pnl": 0,
+                "expectancy": null,
+                "profit_factor": null,
+                "max_drawdown": 0.0,
+                "sharpe": null,
+                "sortino": null,
+                "win_rate": null,
+                "average_win": null,
+                "average_loss": null,
+                "tail_loss": null,
+                "mean_entry_slippage": null
+              },
+              "assumptions": {
+                "initial_equity": 100.0,
+                "stop_pct": 0.08,
+                "trail_arm": 0.015,
+                "trail_distance": 0.006,
+                "fee": 0.0005,
+                "slippage_per_fill": 0.0005,
+                "notional": 100.0,
+                "funding": "unavailable",
+                "fill_timing": "next_bar_open"
+              }
+            },
+            {
+              "candidate_bars": 0,
+              "end_open": false,
+              "modeled_wallet": 100.0,
+              "marked_equity": 100.0,
+              "metrics": {
+                "trades": 0,
+                "net_pnl": 0,
+                "expectancy": null,
+                "profit_factor": null,
+                "max_drawdown": 0.0,
+                "sharpe": null,
+                "sortino": null,
+                "win_rate": null,
+                "average_win": null,
+                "average_loss": null,
+                "tail_loss": null,
+                "mean_entry_slippage": null
+              },
+              "assumptions": {
+                "initial_equity": 100.0,
+                "stop_pct": 0.04,
+                "trail_arm": 0.015,
+                "trail_distance": 0.006,
+                "fee": 0.0005,
+                "slippage_per_fill": 0.0005,
+                "notional": 100.0,
+                "funding": "unavailable",
+                "fill_timing": "next_bar_open"
+              }
+            },
+            {
+              "candidate_bars": 0,
+              "end_open": false,
+              "modeled_wallet": 100.0,
+              "marked_equity": 100.0,
+              "metrics": {
+                "trades": 0,
+                "net_pnl": 0,
+                "expectancy": null,
+                "profit_factor": null,
+                "max_drawdown": 0.0,
+                "sharpe": null,
+                "sortino": null,
+                "win_rate": null,
+                "average_win": null,
+                "average_loss": null,
+                "tail_loss": null,
+                "mean_entry_slippage": null
+              },
+              "assumptions": {
+                "initial_equity": 100.0,
+                "stop_pct": 0.02,
+                "trail_arm": 0.015,
+                "trail_distance": 0.006,
+                "fee": 0.0005,
+                "slippage_per_fill": 0.0005,
+                "notional": 100.0,
+                "funding": "unavailable",
+                "fill_timing": "next_bar_open"
+              }
+            }
+          ]
+        },
+        {
+          "start": "2026-10-29T00:00:00+00:00",
+          "end": "2026-10-31T23:59:00+00:00",
+          "variants": [
+            {
+              "candidate_bars": 1,
+              "end_open": false,
+              "modeled_wallet": 100.86975443968562,
+              "marked_equity": 100.86975443968562,
+              "metrics": {
+                "trades": 1,
+                "net_pnl": 0.8697544396856166,
+                "expectancy": 0.8697544396856166,
+                "profit_factor": null,
+                "max_drawdown": 0.010373433122411806,
+                "sharpe": null,
+                "sortino": null,
+                "win_rate": 1.0,
+                "average_win": 0.8697544396856166,
+                "average_loss": null,
+                "tail_loss": 0.8697544396856166,
+                "mean_entry_slippage": 0.0005
+              },
+              "assumptions": {
+                "initial_equity": 100.0,
+                "stop_pct": 0.08,
+                "trail_arm": 0.015,
+                "trail_distance": 0.006,
+                "fee": 0.0005,
+                "slippage_per_fill": 0.0005,
+                "notional": 100.0,
+                "funding": "unavailable",
+                "fill_timing": "next_bar_open"
+              }
+            },
+            {
+              "candidate_bars": 1,
+              "end_open": false,
+              "modeled_wallet": 100.86975443968562,
+              "marked_equity": 100.86975443968562,
+              "metrics": {
+                "trades": 1,
+                "net_pnl": 0.8697544396856166,
+                "expectancy": 0.8697544396856166,
+                "profit_factor": null,
+                "max_drawdown": 0.010373433122411806,
+                "sharpe": null,
+                "sortino": null,
+                "win_rate": 1.0,
+                "average_win": 0.8697544396856166,
+                "average_loss": null,
+                "tail_loss": 0.8697544396856166,
+                "mean_entry_slippage": 0.0005
+              },
+              "assumptions": {
+                "initial_equity": 100.0,
+                "stop_pct": 0.04,
+                "trail_arm": 0.015,
+                "trail_distance": 0.006,
+                "fee": 0.0005,
+                "slippage_per_fill": 0.0005,
+                "notional": 100.0,
+                "funding": "unavailable",
+                "fill_timing": "next_bar_open"
+              }
+            },
+            {
+              "candidate_bars": 1,
+              "end_open": false,
+              "modeled_wallet": 100.86975443968562,
+              "marked_equity": 100.86975443968562,
+              "metrics": {
+                "trades": 1,
+                "net_pnl": 0.8697544396856166,
+                "expectancy": 0.8697544396856166,
+                "profit_factor": null,
+                "max_drawdown": 0.010373433122411806,
+                "sharpe": null,
+                "sortino": null,
+                "win_rate": 1.0,
+                "average_win": 0.8697544396856166,
+                "average_loss": null,
+                "tail_loss": 0.8697544396856166,
+                "mean_entry_slippage": 0.0005
+              },
+              "assumptions": {
+                "initial_equity": 100.0,
+                "stop_pct": 0.02,
+                "trail_arm": 0.015,
+                "trail_distance": 0.006,
+                "fee": 0.0005,
+                "slippage_per_fill": 0.0005,
+                "notional": 100.0,
+                "funding": "unavailable",
+                "fill_timing": "next_bar_open"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "SOLUSDT-1m-2026-10": {
+      "candles": 43200,
+      "gaps": [
+        {
+          "after": "2026-10-27T23:59:00+00:00",
+          "before": "2026-10-29T00:00:00+00:00",
+          "missing_bars": 1440
+        }
+      ],
+      "segments": [
+        {
+          "start": "2026-10-22T00:00:00+00:00",
+          "end": "2026-10-27T23:59:00+00:00",
+          "variants": [
+            {
+              "candidate_bars": 0,
+              "end_open": false,
+              "modeled_wallet": 100.0,
+              "marked_equity": 100.0,
+              "metrics": {
+                "trades": 0,
+                "net_pnl": 0,
+                "expectancy": null,
+                "profit_factor": null,
+                "max_drawdown": 0.0,
+                "sharpe": null,
+                "sortino": null,
+                "win_rate": null,
+                "average_win": null,
+                "average_loss": null,
+                "tail_loss": null,
+                "mean_entry_slippage": null
+              },
+              "assumptions": {
+                "initial_equity": 100.0,
+                "stop_pct": 0.08,
+                "trail_arm": 0.015,
+                "trail_distance": 0.006,
+                "fee": 0.0005,
+                "slippage_per_fill": 0.0005,
+                "notional": 100.0,
+                "funding": "unavailable",
+                "fill_timing": "next_bar_open"
+              }
+            },
+            {
+              "candidate_bars": 0,
+              "end_open": false,
+              "modeled_wallet": 100.0,
+              "marked_equity": 100.0,
+              "metrics": {
+                "trades": 0,
+                "net_pnl": 0,
+                "expectancy": null,
+                "profit_factor": null,
+                "max_drawdown": 0.0,
+                "sharpe": null,
+                "sortino": null,
+                "win_rate": null,
+                "average_win": null,
+                "average_loss": null,
+                "tail_loss": null,
+                "mean_entry_slippage": null
+              },
+              "assumptions": {
+                "initial_equity": 100.0,
+                "stop_pct": 0.04,
+                "trail_arm": 0.015,
+                "trail_distance": 0.006,
+                "fee": 0.0005,
+                "slippage_per_fill": 0.0005,
+                "notional": 100.0,
+                "funding": "unavailable",
+                "fill_timing": "next_bar_open"
+              }
+            },
+            {
+              "candidate_bars": 0,
+              "end_open": false,
+              "modeled_wallet": 100.0,
+              "marked_equity": 100.0,
+              "metrics": {
+                "trades": 0,
+                "net_pnl": 0,
+                "expectancy": null,
+                "profit_factor": null,
+                "max_drawdown": 0.0,
+                "sharpe": null,
+                "sortino": null,
+                "win_rate": null,
+                "average_win": null,
+                "average_loss": null,
+                "tail_loss": null,
+                "mean_entry_slippage": null
+              },
+              "assumptions": {
+                "initial_equity": 100.0,
+                "stop_pct": 0.02,
+                "trail_arm": 0.015,
+                "trail_distance": 0.006,
+                "fee": 0.0005,
+                "slippage_per_fill": 0.0005,
+                "notional": 100.0,
+                "funding": "unavailable",
+                "fill_timing": "next_bar_open"
+              }
+            }
+          ]
+        },
+        {
+          "start": "2026-10-29T00:00:00+00:00",
+          "end": "2026-10-31T23:59:00+00:00",
+          "variants": [
+            {
+              "candidate_bars": 1,
+              "end_open": true,
+              "modeled_wallet": 99.95,
+              "marked_equity": 97.79129253029211,
+              "metrics": {
+                "trades": 0,
+                "net_pnl": 0,
+                "expectancy": null,
+                "profit_factor": null,
+                "max_drawdown": 0.059406055467586136,
+                "sharpe": null,
+                "sortino": null,
+                "win_rate": null,
+                "average_win": null,
+                "average_loss": null,
+                "tail_loss": null,
+                "mean_entry_slippage": null
+              },
+              "assumptions": {
+                "initial_equity": 100.0,
+                "stop_pct": 0.08,
+                "trail_arm": 0.015,
+                "trail_distance": 0.006,
+                "fee": 0.0005,
+                "slippage_per_fill": 0.0005,
+                "notional": 100.0,
+                "funding": "unavailable",
+                "fill_timing": "next_bar_open"
+              }
+            },
+            {
+              "candidate_bars": 1,
+              "end_open": false,
+              "modeled_wallet": 95.845974,
+              "marked_equity": 95.845974,
+              "metrics": {
+                "trades": 1,
+                "net_pnl": -4.154026000000006,
+                "expectancy": -4.154026000000006,
+                "profit_factor": 0.0,
+                "max_drawdown": 0.04670912987911137,
+                "sharpe": null,
+                "sortino": null,
+                "win_rate": 0.0,
+                "average_win": null,
+                "average_loss": 4.154026000000006,
+                "tail_loss": -4.154026000000006,
+                "mean_entry_slippage": 0.0005
+              },
+              "assumptions": {
+                "initial_equity": 100.0,
+                "stop_pct": 0.04,
+                "trail_arm": 0.015,
+                "trail_distance": 0.006,
+                "fee": 0.0005,
+                "slippage_per_fill": 0.0005,
+                "notional": 100.0,
+                "funding": "unavailable",
+                "fill_timing": "next_bar_open"
+              }
+            },
+            {
+              "candidate_bars": 1,
+              "end_open": false,
+              "modeled_wallet": 97.84797450000002,
+              "marked_equity": 97.84797450000002,
+              "metrics": {
+                "trades": 1,
+                "net_pnl": -2.1520254999999837,
+                "expectancy": -2.1520254999999837,
+                "profit_factor": 0.0,
+                "max_drawdown": 0.026797090604227733,
+                "sharpe": null,
+                "sortino": null,
+                "win_rate": 0.0,
+                "average_win": null,
+                "average_loss": 2.1520254999999837,
+                "tail_loss": -2.1520254999999837,
+                "mean_entry_slippage": 0.0005
+              },
+              "assumptions": {
+                "initial_equity": 100.0,
+                "stop_pct": 0.02,
+                "trail_arm": 0.015,
+                "trail_distance": 0.006,
+                "fee": 0.0005,
+                "slippage_per_fill": 0.0005,
+                "notional": 100.0,
+                "funding": "unavailable",
+                "fill_timing": "next_bar_open"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "archive_sha256": {
+    "BTCUSDT": "580bbf821130c6516f0b15819292beae79fd3d08498a0965fe8529308babf16b",
+    "DOGEUSDT": "e52d7248e9127478f80ccd98f0915f6a3ae280af2f2369f3ff2ff84987f4dec9",
+    "ETHUSDT": "ef0ecb89e153f59c5d862f7f8ec0fa802037eec037198246c4aac6a2c8617ada",
+    "SOLUSDT": "9401a7a11659136b2cb631255de40953f28b6a3cb5591409bb5b2a9f5471d636"
+  },
+  "provenance": "https://data.binance.vision/data/futures/um/monthly/klines/"
+}

@@ -1,4 +1,4 @@
-"""Run Khaled in the single execution mode selected by baseline.json."""
+"""Run the supported Khaled Apex Paper runtime."""
 import argparse
 import asyncio
 import logging
@@ -31,7 +31,8 @@ def main():
     state = args.state or cfg['exchange']['state_filename']
     if cfg['exchange']['mode'] == 'paper' and args.state is None:
         state = str(Path(cfg['exchange']['state_dir']) / 'paper' / state)
-    # Constructor refuses mainnet without evidence and explicit operator approval.
+    if cfg['exchange']['mode'] != 'paper':
+        parser.error('Use run_demo.py for the separately authorized Demo mode')
     bot = V2PaperHunter(state_path=state, fee_rate=cfg['fee_rate'])
     logging.getLogger('CASCADE').info('KHALED %s | MODE=%s | %sx | equity margin ceiling=10%% | max_positions=4', cfg['version'], bot.execution_mode, bot.settings()['LEVERAGE'])
     try:

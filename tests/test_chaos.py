@@ -40,7 +40,8 @@ def test_ws_disconnects_10min_kill():
     cfg = load_config()
     kill = KillSwitch(cfg['kill_switch'], 'demo')
     kill.state.last_ws_heartbeat = time.time() - 600
-    assert kill.check(SimpleNamespace(equity=100), None) is None
+    assert kill.check(SimpleNamespace(equity=100), None) == 'ws_timeout'
+    assert kill.blocks_entries
     assert kill.triggered == 'ws_timeout' and not kill.should_flatten(kill.triggered)
     hard = KillSwitch(cfg['kill_switch'], 'mainnet')
     hard.state.last_ws_heartbeat = time.time() - 600
@@ -48,7 +49,7 @@ def test_ws_disconnects_10min_kill():
     assert hard.blocks_entries and hard.should_flatten('ws_timeout')
 
 
-def test_api_errors_20_no_halt():
+def test_api_errors_degrade_demo_without_flattening():
     async def check():
         cfg = load_config()
         breaker = CircuitBreaker(cfg['circuit_breaker'])
@@ -59,8 +60,8 @@ def test_api_errors_20_no_halt():
         for _ in range(20):
             with pytest.raises(TimeoutError): await breaker.call(failure)
         assert breaker.state == BreakerState.CLOSED
-        assert kill.check(SimpleNamespace(equity=100), None) is None
-        assert not kill.blocks_entries
+        assert kill.check(SimpleNamespace(equity=100), None) == 'api_errors'
+        assert kill.blocks_entries and not kill.should_flatten('api_errors')
     asyncio.run(check())
 
 

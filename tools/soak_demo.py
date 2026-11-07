@@ -32,8 +32,8 @@ async def collect(hours):
                     response = await client.get('http://127.0.0.1:%d/health' % cfg['health']['port'])
                     response.raise_for_status()
                     sample = response.json()
-                    if sample.get('mode') != 'testnet' or sample['kill_switch']['mode'] != 'observe':
-                        raise ValueError('Soak requires the Demo observe process')
+                    if sample.get('mode') != 'testnet' or sample['kill_switch']['mode'] != 'soft':
+                        raise ValueError('Soak requires the Demo entry-blocking process')
                     latency = (time.monotonic() - tick) * 1000
                     if previous_uptime is not None and sample['uptime_sec'] < previous_uptime: report['restarts'] += 1
                     previous_uptime = sample['uptime_sec']

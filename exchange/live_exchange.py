@@ -37,14 +37,10 @@ class LiveExchange(DurableExecution, NativeExitState, ProtectionRecovery, PaperE
     def __init__(self, cfg: dict, rate_limiter):
         self.cfg = cfg
         self.mode = cfg['exchange']['mode']
-        if self.mode not in ('testnet', 'mainnet'):
-            raise ValueError('LiveExchange requires testnet or mainnet mode')
-        if self.mode == 'mainnet':
-            from .rollout import require_mainnet_readiness
-            require_mainnet_readiness(cfg)
-        if self.mode == 'testnet':
-            from .demo import validate_demo
-            validate_demo(cfg)
+        if self.mode != 'testnet':
+            raise ValueError('Mainnet is disabled in Apex; LiveExchange requires Demo')
+        from .demo import validate_demo
+        validate_demo(cfg)
         key, secret = os.getenv('BINANCE_API_KEY'), os.getenv('BINANCE_API_SECRET')
         rsa_path = os.getenv('BINANCE_RSA_PRIVATE_KEY_PATH')
         if not key or bool(secret) == bool(rsa_path):
@@ -64,9 +60,6 @@ class LiveExchange(DurableExecution, NativeExitState, ProtectionRecovery, PaperE
             except Exception:
                 raise ValueError('RSA private key must be a readable RSA PEM with mode 0600') from None
         self.allocation_fraction = 1.
-        if self.mode == 'mainnet':
-            from .rollout import mainnet_allocation_fraction
-            self.allocation_fraction = mainnet_allocation_fraction(cfg)
         self._secret = secret
         ec = cfg['exchange']
         secure_http_logging()

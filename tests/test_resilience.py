@@ -17,7 +17,7 @@ def test_environment_modes_cannot_weaken_mainnet():
     cfg['mode'] = 'observe'
     cfg['mode_per_environment']['mainnet'] = 'observe'
     assert KillSwitch(cfg, 'mainnet').mode == 'hard'
-    assert KillSwitch(cfg, 'demo').mode == 'observe'
+    assert KillSwitch(cfg, 'demo').mode == 'soft'
     assert KillSwitch(cfg, 'testnet').mode == 'soft'
 
 

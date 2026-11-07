@@ -7,9 +7,9 @@ StartLimitIntervalSec=0
 [Service]
 Type=simple
 User=khaled
-WorkingDirectory=/home/khaled/Khaled
-EnvironmentFile=/home/khaled/Khaled/.env
-ExecStart=/home/khaled/Khaled/.venv/bin/python -u tools/watch_health.py
+WorkingDirectory=/home/khaled/Khaled-Apex
+EnvironmentFile=/home/khaled/Khaled-Apex/.env
+ExecStart=/home/khaled/Khaled-Apex/.venv/bin/python -u tools/watch_health.py
 Restart=always
 RestartSec=5
 UMask=0077

@@ -6,6 +6,8 @@ import time
 from pathlib import Path
 
 def main():
+    if '--enable-demo' not in sys.argv[1:]:
+        raise SystemExit('Demo requires --enable-demo')
     root = Path(__file__).resolve().parents[1]
     stopping = False
     child = None

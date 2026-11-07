@@ -111,11 +111,9 @@ class SafetySupervisor:
                     and direction(side) * float(data['lastFundingRate']) > self.cfg['funding']['close_threshold']):
                 await self.event('entry_blocked', symbol=symbol, reason='funding_window')
                 return False
-        from risk.trading_policy import entry_amount, fixed_paper_notional
-        notional = fixed_paper_notional(self.cfg)
-        if notional is None:
-            notional = entry_amount(self.bot.exchange.equity, price, self.cfg['leverage'],
-                                    self.cfg, self.bot.exchange.fee_rate) * price
+        from risk.trading_policy import entry_amount
+        notional = entry_amount(self.bot.exchange.equity, price, self.cfg['leverage'],
+                                self.cfg, self.bot.exchange.fee_rate) * price
         if self.bot.execution_mode == 'mainnet':
             notional *= self.bot.exchange.allocation_fraction
         allowed, reason = can_open(self.bot, symbol, side, notional, self.cfg['exposure'])

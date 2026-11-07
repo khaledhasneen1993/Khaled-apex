@@ -11,7 +11,10 @@ def main():
     configure()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--dashboard', action='store_true', help='Publish to the existing dashboard using local token')
+    parser.add_argument('--enable-demo', action='store_true', help='Explicitly authorize this Demo process')
     args = parser.parse_args()
+    if not args.enable_demo:
+        parser.error('Demo requires --enable-demo')
     cfg = load_config()
     if cfg['exchange']['mode'] == 'mainnet':
         raise ValueError('Demo runner refuses Mainnet baseline')

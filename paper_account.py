@@ -40,15 +40,17 @@ class Position(dict):
 
 
 def make_position(side, entry, amount, leverage, atr, cfg, equity, fee_rate,
-                  opened_at=None, signal_id=None, atr_source="candles", *, enforce_equity_risk=True):
+                  opened_at=None, signal_id=None, atr_source="candles"):
     sm = 1 if side == "buy" else -1
     from risk.trading_policy import fixed_exits
     if fixed_exits(cfg):
         from risk.liq_math import validate_stop_against_liq
         pct = cfg['exit']['hard_stop_pct']
         stop = entry * (1 - sm * pct)
-        loss = amount * (entry * pct + fee_rate * (entry + stop))
-        if enforce_equity_risk and loss > equity * cfg['tp_sl']['max_equity_risk_pct'] + math.ulp(equity) * 8:
+        exit_slip = cfg['slippage'].get('paper_exit_slippage_bps', 0) / 10000 if cfg['exchange']['mode'] == 'paper' else 0
+        estimated_exit = stop * (1 - sm * exit_slip)
+        loss = amount * (sm * (entry - estimated_exit) + fee_rate * (entry + estimated_exit))
+        if loss > equity * cfg['tp_sl']['max_equity_risk_pct'] + math.ulp(equity) * 8:
             raise ValueError('Hard stop exceeds equity risk budget')
         if not validate_stop_against_liq(side, entry, stop, leverage, cfg['tp_sl']['mmr'],
                 cfg['tp_sl']['liq_safety_margin'], cfg['tp_sl'].get('maintenance_amount', 0), amount):
@@ -141,21 +143,24 @@ class PaperExchange:
         if not math.isfinite(amount) or amount <= 0:
             raise ValueError("Invalid amount")
         closing = bool((params or {}).get("reduceOnly", False))
+        expected_input = (params or {}).get("expected_price")
+        if expected_input is not None and (not math.isfinite(float(expected_input)) or float(expected_input) <= 0):
+            raise ValueError("Invalid expected execution price")
+        price = float((await self.fetch_ticker(symbol))["last"])
         position = self.positions.get(symbol)
         if closing and (not position or position["side"] == side
                         or not math.isclose(amount, position["amount"])):
             raise ValueError("Invalid reduce-only close")
         if not closing and position:
             raise ValueError("Position already exists")
-        price = float((await self.fetch_ticker(symbol))["last"])
-        target_notional = None
-        if not closing and (params or {}).get("use_paper_notional"):
-            from risk.trading_policy import fixed_paper_notional
-            target_notional = fixed_paper_notional(self.cfg)
-            if target_notional is not None:
-                amount = float(self.amount_to_precision(symbol, target_notional / price))
-                if not math.isfinite(amount) or amount <= 0:
-                    raise ValueError("Fixed Paper notional is below market quantity precision")
+        if not closing:
+            from risk.trading_policy import paper_notional_ceiling
+            ceiling = paper_notional_ceiling(self.cfg)
+            if ceiling is not None and amount * price > ceiling + math.ulp(ceiling):
+                raise ValueError("Paper notional exceeds configured ceiling")
+            expected = price if expected_input is None else float(expected_input)
+            if entry_slippage_bps(expected, price, side) > self.cfg["slippage"]["max_expected_entry_bps"]:
+                raise ValueError("Paper execution price exceeded slippage budget")
         notional = amount * price
         fee = notional * self.fee_rate
         pnl = 0.0
@@ -180,13 +185,12 @@ class PaperExchange:
             atr = (params or {}).get("exit_atr", price * self.cfg["atr"]["fallback_atr_pct"])
             risk_position = make_position(side, price, amount, self.leverage, atr,
                                           self.cfg, self.equity, self.fee_rate,
-                                          atr_source=(params or {}).get("atr_source", "fallback"),
-                                          enforce_equity_risk=target_notional is None)
+                                          atr_source=(params or {}).get("atr_source", "fallback"))
             self.balance -= fee
             self.positions[symbol] = {
                 "side": side, "entry": price, "amount": amount, "margin": margin,
             }
-        expected = float((params or {}).get("expected_price", price))
+        expected = price if expected_input is None else float(expected_input)
         if not closing:
             risk_position.update(expected_entry=expected, actual_entry=price,
                                  entry_slippage_bps=entry_slippage_bps(expected, price, side))

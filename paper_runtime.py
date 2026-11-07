@@ -77,8 +77,8 @@ class DynamicPaperHunter(dynamic.CascadeHunter, PaperState):
             "COOLDOWN_SEC", "SCAN_INTERVAL",
             "MAX_SYMBOLS_TO_SCAN", "MAX_CONCURRENT_POSITIONS", "MIN_QUOTE_VOLUME",
         )}}
-        from risk.trading_policy import fixed_paper_notional
-        notional = fixed_paper_notional(self.cfg)
+        from risk.trading_policy import paper_notional_ceiling
+        notional = paper_notional_ceiling(self.cfg)
         if notional is not None:
             result["paper_position_notional_usdt"] = notional
         if self.execution_mode != 'paper' and self.cfg['exchange']['leverage_policy'] != 'fixed':

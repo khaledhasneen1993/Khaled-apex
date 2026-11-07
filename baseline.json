@@ -1,5 +1,5 @@
 {
-  "name": "Khaled Cascade Hunter",
+  "name": "Khaled Apex",
   "version": "4.1.1",
   "status": "offline_validated_pending_demo_soak",
   "python": ">=3.11",
@@ -152,7 +152,7 @@
     "mode": "observe",
     "mode_per_environment": {
       "paper": "observe",
-      "demo": "observe",
+      "demo": "soft",
       "testnet": "soft",
       "mainnet": "hard"
     },
@@ -216,6 +216,7 @@
     "alert_bps": 20.0,
     "window": 50,
     "max_expected_entry_bps": 30.0,
+    "paper_exit_slippage_bps": 30.0,
     "alert_cooldown_sec": 600
   },
   "alerts": {

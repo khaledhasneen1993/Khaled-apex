@@ -19,7 +19,7 @@ class KillSwitch:
         self.environment = environment
         self.mode = 'hard' if environment is None else cfg.get('mode_per_environment', {}).get(environment, cfg.get('mode', 'hard'))
         if environment == 'mainnet': self.mode = 'hard'
-        if environment == 'demo': self.mode = 'observe'
+        if environment == 'demo': self.mode = 'soft'
         if self.mode not in ('observe', 'soft', 'hard'): raise ValueError('Invalid kill mode')
         self.cfg = dict(cfg)
         if environment == 'mainnet': self.cfg['daily_drawdown_action'] = 'flatten'

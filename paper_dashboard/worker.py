@@ -66,7 +66,10 @@ async def serve(bot, name):
     async def report():
         while True:
             # Telemetry reads memory; durable saving remains owned by the bot.
-            snapshot(bot, name, 'running')
+            try:
+                snapshot(bot, name, 'running')
+            except (OSError, ValueError) as error:
+                print(f"Telemetry snapshot unavailable: {type(error).__name__}", file=sys.stderr)
             await asyncio.sleep(3)
     run = asyncio.create_task(bot.start())
     if name == 'khaled':

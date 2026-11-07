@@ -139,13 +139,13 @@ def test_failed_new_stop_preserves_old_stop(live):
     run(check())
 
 
-def test_mainnet_without_evidence_cannot_create_client(monkeypatch, tmp_path):
+def test_apex_mainnet_cannot_create_client(monkeypatch, tmp_path):
     cfg = load_config()
     cfg['exchange']['mode'] = 'mainnet'
     cfg['rollout']['evidence_file'] = str(tmp_path / 'missing.json')
     cfg['rollout']['approval_file'] = str(tmp_path / 'approval.json')
     with patch('exchange.live_exchange.httpx.AsyncClient') as client:
-        with pytest.raises(ValueError, match='Mainnet locked'):
+        with pytest.raises(ValueError, match='Mainnet is disabled'):
             LiveExchange(cfg, Mock())
         client.assert_not_called()
 

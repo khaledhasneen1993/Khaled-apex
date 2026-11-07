@@ -19,12 +19,13 @@ class V2Tests(unittest.IsolatedAsyncioTestCase):
         self.data.tickers['DOGE/USDT:USDT'] = {'quoteVolume': 25_000_000}
         self.bot = V2PaperHunter(self.path, fee_rate=0, market_data=self.data)
 
-    async def test_fixed_notional_allows_four_positions(self):
+    async def test_risk_capped_notional_allows_four_positions(self):
         for symbol in ('BTC/USDT:USDT','ETH/USDT:USDT','SOL/USDT:USDT','DOGE/USDT:USDT'):
             self.assertTrue(await self.bot.enter(symbol, 'buy', 100))
             pos = self.bot.positions[symbol]
-            self.assertEqual(pos['amount'] * pos['entry'], 100)
-            self.assertEqual(self.bot.exchange.positions[symbol]['margin'], 10)
+            self.assertLess(pos['amount'] * pos['entry'], 100)
+            self.assertLessEqual(pos['amount'] * pos['entry'] * .084, 2.5 + .02)
+            self.assertAlmostEqual(self.bot.exchange.positions[symbol]['margin'], pos['amount'] * pos['entry'] / 10)
         self.assertFalse(await self.bot.enter('FIFTH/USDT:USDT','buy',100))
         self.assertEqual(len(self.bot.positions), 4)
 
@@ -82,13 +83,13 @@ class V2Tests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(self.bot.positions),4)
         self.assertEqual(len(self.bot.exchange.trades),4)
 
-    async def test_fixed_notional_uses_execution_price(self):
+    async def test_risk_capped_order_preserves_quantity_at_execution_price(self):
         symbol = 'BTC/USDT:USDT'
         self.data.fetch_ticker = AsyncMock(side_effect=[{'last': 100}, {'last': 100.1}])
         self.assertTrue(await self.bot.enter(symbol, 'buy', 100))
         fill = self.bot.exchange.trades[0]
-        self.assertEqual(fill['amount'], .999)
-        self.assertAlmostEqual(fill['amount'] * fill['price'], 99.9999)
+        self.assertEqual(fill['amount'], .299)
+        self.assertAlmostEqual(fill['amount'] * fill['price'], 29.9299)
         self.assertAlmostEqual(self.bot.positions[symbol]['sl'], 100.1 * .92)
 
     async def test_sizing_uses_current_equity_and_fee_budget(self):

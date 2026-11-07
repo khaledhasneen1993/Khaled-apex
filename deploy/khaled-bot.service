@@ -8,9 +8,9 @@ StartLimitIntervalSec=0
 [Service]
 Type=simple
 User=khaled
-WorkingDirectory=/home/khaled/Khaled
-EnvironmentFile=/home/khaled/Khaled/.env
-ExecStart=/home/khaled/Khaled/.venv/bin/python -u run_demo.py
+WorkingDirectory=/home/khaled/Khaled-Apex
+EnvironmentFile=/home/khaled/Khaled-Apex/.env
+ExecStart=/home/khaled/Khaled-Apex/.venv/bin/python -u run_demo.py --enable-demo
 Restart=always
 RestartSec=5
 TimeoutStopSec=30

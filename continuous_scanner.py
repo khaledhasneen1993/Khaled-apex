@@ -8,6 +8,8 @@ from urllib.parse import urlencode
 
 import aiohttp
 
+from strategies.legacy import cascade_signal, imbalance_matches
+
 import binance_cascade_hunter_dynamic_v2 as default_config
 
 WS_URL = "wss://fstream.binance.com/market/stream"
@@ -157,14 +159,7 @@ class ContinuousScanner:
                 or self.wall_clock() - self.event_times[symbol] / 1000 > MAX_EVENT_AGE):
             return None
         rows = list(self.histories.get(symbol, ()))
-        if len(rows) < 15:
-            return None
-        ret = (rows[-1][4] - rows[-3][4]) / rows[-3][4]
-        average = sum(r[5] for r in rows[-15:-3]) / 12
-        spike = rows[-1][5] / average if average > 0 else 0
-        if abs(ret) <= self.config.CASCADE_THRESHOLD or spike <= self.config.VOLUME_SPIKE:
-            return None
-        return {"side": "buy" if ret > 0 else "sell", "price": rows[-1][4], "ret": ret, "spike": spike}
+        return cascade_signal(rows, self.config.CASCADE_THRESHOLD, self.config.VOLUME_SPIKE)
 
     async def evaluate(self, symbol):
         if symbol in self.bot.positions or len(self.bot.positions) >= self.config.MAX_CONCURRENT_POSITIONS:
@@ -200,8 +195,7 @@ class ContinuousScanner:
             if (signal is None or symbol in self.bot.positions
                     or len(self.bot.positions) >= self.config.MAX_CONCURRENT_POSITIONS):
                 return
-            if not ((signal["side"] == "buy" and imbalance > 0.35)
-                    or (signal["side"] == "sell" and imbalance < -0.35)):
+            if not imbalance_matches(signal["side"], imbalance):
                 return
             # First eligible completed check gets the slot; do not wait for all symbols.
             if await self.bot.enter(symbol, signal["side"], signal["price"]):

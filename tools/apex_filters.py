@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from apex.engine import Instrument
+from exchange.quantity import quantity_rules
 from market_data.capture import SYMBOL, get
 
 
@@ -17,10 +18,12 @@ def extract(payload, selected):
         if row["contractType"] != "PERPETUAL" or row["marginAsset"] != "USDT" or row["status"] != "TRADING":
             raise ValueError(f"Ineligible USD-M perpetual {name}")
         filters = {rule["filterType"]: rule for rule in row["filters"]}
-        step = float(filters["MARKET_LOT_SIZE"]["stepSize"])
+        quantity = quantity_rules(filters)
         minimum = float(filters["MIN_NOTIONAL"]["notional"])
-        Instrument(step, minimum)
-        instruments[name] = {"step": step, "min_notional": minimum}
+        rules = dict(step=float(quantity["step"]), min_notional=minimum,
+                     min_qty=float(quantity["min"]), max_qty=float(quantity["max"]))
+        Instrument(**rules)
+        instruments[name] = rules
     if set(instruments) != set(selected):
         raise ValueError("Missing requested instrument")
     return instruments

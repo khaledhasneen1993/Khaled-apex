@@ -79,35 +79,6 @@ class TestnetEvidence:
                 'stuck_fraction': (sum(t['exit_detail']['time_in_trade_sec'] > self.cfg['rollout']['stuck_minutes'] * 60 for t in trades) + sum(age > self.cfg['rollout']['stuck_minutes'] * 60 for age in d.get('open_trade_ages', []))) / (len(trades) + len(d.get('open_trade_ages', []))) if trades or d.get('open_trade_ages') else None}
 
 
-def require_mainnet_readiness(cfg):
-    gate = cfg['rollout']
-    evidence_path, approval_path = Path(gate['evidence_file']), Path(gate['approval_file'])
-    if not evidence_path.is_file() or not approval_path.is_file():
-        raise ValueError('Mainnet locked: 14-day testnet evidence and explicit operator approval required')
-    for state_path in (Path(cfg['exchange']['state_dir']) / 'testnet').glob('*.json'):
-        try: saved = json.loads(state_path.read_text())
-        except (ValueError, OSError): raise ValueError('Mainnet locked: unreadable Testnet state') from None
-        if isinstance(saved, dict) and saved.get('operations', {}).get('kill', {}).get('triggered'):
-            raise ValueError('Mainnet locked: review and reset the Testnet incident latch first')
-    evidence = TestnetEvidence(cfg)
-    data, metrics = evidence.data, evidence.metrics()
-    approval = json.loads(approval_path.read_text())
-    expected = hashlib.sha256(evidence_path.read_bytes()).hexdigest()
-    checks = (data.get('mode') == 'testnet', data['monitored_seconds'] >= gate['testnet_days_required'] * 86400,
-        data['continuous_seconds'] >= gate['continuous_days_required'] * 86400,
-        data.get('technical_kills') == 0, data.get('reconcile_mismatches') == 0,
-        metrics['closed_trades'] >= gate['min_closed_trades'],
-        metrics['max_drawdown'] < gate['max_drawdown_pct'],
-        metrics['mean_entry_slippage_bps'] is not None and metrics['mean_entry_slippage_bps'] < gate['max_mean_entry_slippage_bps'],
-        metrics['rolling_100_sharpe'] is not None and metrics['rolling_100_sharpe'] >= gate['min_sharpe'],
-        metrics['stuck_fraction'] is not None and metrics['stuck_fraction'] < gate['max_stuck_fraction'],
-        approval.get('approved') is True, approval.get('evidence_sha256') == expected,
-        approval.get('config_hash') == strategy_fingerprint(cfg), approval.get('code_hash') == code_fingerprint(),
-        approval.get('max_fraction') == gate['initial_mainnet_fraction'])
-    if not all(checks):
-        raise ValueError('Mainnet locked: testnet acceptance or explicit approval is incomplete')
-
-
 def require_operator_policy(cfg, mode):
     """Operator attestation for controls the Futures API cannot prove locally."""
     path = Path(cfg['rollout']['operator_policy_file'].format(mode=mode))

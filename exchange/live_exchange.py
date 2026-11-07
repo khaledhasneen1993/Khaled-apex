@@ -134,7 +134,7 @@ class LiveExchange(DurableExecution, NativeExitState, ProtectionRecovery, PaperE
         self.intents[client_id] = {'symbol': params['symbol'], 'type': params['type'],
             'side': params['side'], 'amount': params['amount'],
             'params': {k: v for k, v in params['params'].items() if k in
-                       ('reduceOnly', 'expected_price', 'exit_atr', 'atr_source', 'stopPrice', 'round_up', 'newClientOrderId', 'signal_id', 'leverage', 'risk_cfg', 'equity', 'brackets', 'exit_reason', 'exit_position', 'protection_role', 'replaces', 'protection_transport', 'emergency')},
+                       ('reduceOnly', 'expected_price', 'exit_atr', 'atr_source', 'stopPrice', 'round_up', 'newClientOrderId', 'signal_id', 'leverage', 'risk_cfg', 'equity', 'brackets', 'exit_reason', 'exit_position', 'protection_role', 'replaces', 'protection_transport', 'emergency', 'apex_plan')},
             'status': 'pending'}
         self.write_state(self.intent_path, self.intents)
         logged = self.journal.log('order_intent_saved', stage='before_post', symbol=params['symbol'], client_order_id=client_id, recovery_action='query_same_id')
@@ -187,6 +187,9 @@ class LiveExchange(DurableExecution, NativeExitState, ProtectionRecovery, PaperE
             signature = hmac.new(self._secret.encode(), query.encode(), hashlib.sha256).hexdigest()
         return {**value, 'signature': signature}
 
+    async def before_mutation(self, method, path, params):
+        return None
+
     async def _request(self, method, path, params=None, signed=True, retry=False):
         if method != 'GET' and hasattr(self, 'wal'):
             try:
@@ -206,6 +209,8 @@ class LiveExchange(DurableExecution, NativeExitState, ProtectionRecovery, PaperE
             if method == 'POST' and path in ('/fapi/v1/order', '/fapi/v1/algoOrder'):
                 await self.orders_short.acquire()
                 await self.orders_long.acquire()
+            if method != 'GET':
+                await self.before_mutation(method, path, params or {})
             values = self._sign(params or {}) if signed else (params or {})
             try:
                 response = await self.client.request(method, path, params=values)

@@ -26,6 +26,11 @@ class DynamicPaperExchange(PaperExchange):
 
 
 class DynamicPaperHunter(dynamic.CascadeHunter, PaperState):
+    @staticmethod
+    def live_exchange(cfg, limiter):
+        from exchange.live_exchange import LiveExchange
+        return LiveExchange(cfg, limiter)
+
     def __init__(self, state_path="paper_state_dynamic_v2.json", fee_rate=0.0005,
                  reset=False, market_data=None, strategy_config=dynamic):
         self.strategy = strategy_config
@@ -44,10 +49,9 @@ class DynamicPaperHunter(dynamic.CascadeHunter, PaperState):
         else:
             if market_data is not None:
                 raise ValueError("Injected public paper clients cannot be used in live modes")
-            from exchange.live_exchange import LiveExchange
             from infra.rate_limit import TokenBucket
             ec = self.cfg["exchange"]
-            self.exchange = LiveExchange(self.cfg, TokenBucket(ec["rate_per_sec"], ec["rate_burst"]))
+            self.exchange = self.live_exchange(self.cfg, TokenBucket(ec["rate_per_sec"], ec["rate_burst"]))
         self.exchange.cfg = self.cfg
         self.initial_balance = self.cfg["initial_balance_usdt"] if self.execution_mode == "paper" else None
         self.positions = {}
@@ -213,11 +217,11 @@ class DynamicPaperHunter(dynamic.CascadeHunter, PaperState):
             if key not in self.safety.accounted_closes and not any(self.safety.close_key(t) == key for t in self._notifications):
                 self._notifications.append(final)
 
-    def record_entry_signal(self, symbol, signal):
+    def record_entry_signal(self, symbol, signal, *, reason="CASCADE_MOVE_VOLUME_ORDERBOOK"):
         for trade in reversed(self.exchange.trades):
             if trade["symbol"] == symbol and not trade["reduceOnly"]:
                 trade["entry_signal"] = dict(signal)
-                trade["entry_reason"] = "CASCADE_MOVE_VOLUME_ORDERBOOK"
+                trade["entry_reason"] = reason
                 position = self.positions[symbol]
                 trade["take_profit_price"] = position["tp"]
                 trade["stop_loss_price"] = position["sl"]

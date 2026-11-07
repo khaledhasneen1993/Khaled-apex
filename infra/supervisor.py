@@ -67,7 +67,18 @@ class SafetySupervisor:
     async def event(self, name, level='info', **fields):
         if self.journal:
             self.journal.log(name, **fields)
-        self.alerter.send_nowait(name + ' ' + json.dumps(fields, ensure_ascii=False), level)
+        if level in ('warning', 'error', 'critical'):
+            # Journal every occurrence; rate-limit only notification delivery.
+            now = time.monotonic()
+            alerts = getattr(self, '_alert_deadlines', {})
+            self._alert_deadlines = {k: t for k, t in alerts.items() if t > now}
+            key = (name, fields.get('symbol'), fields.get('reason'))
+            if key in self._alert_deadlines:
+                return
+            if self.alerter.send_nowait(name + ' ' + json.dumps(fields, ensure_ascii=False), level):
+                self._alert_deadlines[key] = now + (30 if level == 'critical' else 120)
+        else:
+            self.alerter.send_nowait(name + ' ' + json.dumps(fields, ensure_ascii=False), level)
 
     def heartbeat(self):
         self.kill.on_ws_heartbeat()

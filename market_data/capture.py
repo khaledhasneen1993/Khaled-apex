@@ -79,39 +79,57 @@ def write_batch(stream, rows):
     stream.flush()
 
 
-async def record(symbols, destination, seconds, replay=None):
+async def verify_clock(session):
+    before = time.time_ns()//1_000_000
+    result = await get(session, "/fapi/v1/time")
+    after = time.time_ns()//1_000_000
+    server = result.get("serverTime")
+    if type(server) is not int or not 0 <= after-before <= 1500 or abs(server-(before+after)//2) > 750:
+        raise ValueError("PUBLIC_MARKET_CLOCK_UNVERIFIED")
+
+
+async def stream(symbols, consumer, *, seconds=None):
+    """Deliver ordered public events in bounded batches to a single consumer."""
     import aiohttp
     queue = asyncio.Queue(maxsize=2000)
     timeout = aiohttp.ClientTimeout(total=12)
     async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
-        with destination.open("x", encoding="utf-8") as output:
-            async with asyncio.TaskGroup() as group:
-                tasks = [group.create_task(produce(session, symbol, feed, queue))
-                         for symbol in symbols for feed in ("depth", "market")]
-                tasks.append(group.create_task(open_interest(session, symbols, queue)))
-                end = time.monotonic()+seconds
-                last_timestamp = 0
-                batch = []
-                try:
-                    while (left := end-time.monotonic()) > 0:
-                        try:
-                            symbol, kind, data = await asyncio.wait_for(queue.get(), min(1., left))
-                            now = max(last_timestamp, time.time_ns()//1_000_000)
-                            last_timestamp = now
-                            row = dict(received_ms=now, symbol=symbol, kind=kind, data=data)
-                            batch.append(row)
-                            if replay is not None:
-                                replay.apply(row)
-                        except TimeoutError:
-                            pass
-                        if batch and (len(batch) >= 100 or queue.empty()):
-                            await asyncio.to_thread(write_batch, output, batch)
-                            batch.clear()
-                finally:
-                    for task in tasks:
-                        task.cancel()
-                if batch:
-                    await asyncio.to_thread(write_batch, output, batch)
+        await verify_clock(session)
+        async with asyncio.TaskGroup() as group:
+            tasks = [group.create_task(produce(session, symbol, feed, queue))
+                     for symbol in symbols for feed in ("depth", "market")]
+            tasks.append(group.create_task(open_interest(session, symbols, queue)))
+            end = time.monotonic()+seconds if seconds is not None else float("inf")
+            last_timestamp = 0
+            try:
+                while (left := end-time.monotonic()) > 0:
+                    try:
+                        batch = [await asyncio.wait_for(queue.get(), min(1., left))]
+                    except TimeoutError:
+                        await consumer([])
+                        continue
+                    while not queue.empty() and len(batch) < 100:
+                        batch.append(queue.get_nowait())
+                    rows = []
+                    for symbol, kind, data in batch:
+                        now = max(last_timestamp, time.time_ns()//1_000_000)
+                        last_timestamp = now
+                        rows.append(dict(received_ms=now, symbol=symbol, kind=kind, data=data))
+                    await consumer(rows)
+            finally:
+                for task in tasks:
+                    task.cancel()
+
+
+async def record(symbols, destination, seconds, replay=None):
+    with destination.open("x", encoding="utf-8") as output:
+        async def consume(rows):
+            if rows:
+                await asyncio.to_thread(write_batch, output, rows)
+                if replay is not None:
+                    for row in rows:
+                        replay.apply(row)
+        await stream(symbols, consume, seconds=seconds)
 
 
 def main():

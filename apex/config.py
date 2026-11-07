@@ -23,6 +23,9 @@ class Config:
     fee: float = .0005
     risk_fraction: float = .0025
     leverage: int = 10
+    max_positions: int = 4
+    thesis_timeout_ms: int = 0
+    enabled_strategies: tuple = ("cascade_v2", "liquidity_reversal", "range_reversion")
     mmr: float = .004
     liquidation_buffer: float = .003
     min_stop: float = .008
@@ -43,9 +46,19 @@ class Config:
     def __post_init__(self):
         for field in fields(self):
             value = getattr(self, field.name)
+            if field.name == "enabled_strategies":
+                continue
+            if field.name == "thesis_timeout_ms" and type(value) is int and value == 0:
+                continue
             if (type(value) not in (int, float) or not math.isfinite(value) or value <= 0
                     or (type(field.default) is int and type(value) is not int)):
                 raise ValueError(f"Invalid Apex setting {field.name}")
+        enabled = self.enabled_strategies
+        if (not isinstance(enabled, (tuple, list)) or any(type(s) is not str for s in enabled)
+                or len(set(enabled)) != len(enabled)
+                or not set(enabled) <= {"cascade_v2", "liquidity_reversal", "range_reversion"}):
+            raise ValueError("Invalid enabled_strategies")
+        object.__setattr__(self, "enabled_strategies", tuple(enabled))
         if (self.version != 1 or self.rank_window_ms >= self.max_age_ms
                 or not .0025 <= self.risk_fraction <= .005
                 or self.leverage > 10 or not 0 < self.fee < self.max_slippage < .1

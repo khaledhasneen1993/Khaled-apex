@@ -22,6 +22,14 @@ from .protection_state import price_exit_reason, ProtectionGuardError
 
 
 class DurableExecution:
+    def build_entry_position(self, side, price, quantity, leverage, atr, risk_cfg,
+                             equity, options, **metadata):
+        return make_position(side, price, quantity, leverage, atr, risk_cfg, equity, self.fee_rate,
+                             **metadata)
+
+    def validate_entry_submission(self, symbol, options):
+        pass
+
     def execution_key(self, symbol, order_id):
         return symbol + ':' + str(order_id)
 
@@ -66,12 +74,16 @@ class DurableExecution:
         self._flush_executions()
         return record
 
-    async def settle_fill(self, symbol, order):
+    async def settle_fill(self, symbol, order, *, allow_empty=False):
         order_id, client_id = str(order['orderId']), order.get('clientOrderId')
         for attempt in range(self.cfg['exchange']['order_poll_attempts'] + 1):
             qty = positive_decimal(order.get('executedQty'))
             if order.get('status') in TERMINAL:
-                if qty is None: raise ExchangeError(400)
+                if qty is None:
+                    if (allow_empty and order["status"] != "FILLED" and order.get("executedQty") is not None
+                            and Decimal(str(order["executedQty"])) == 0):
+                        return order
+                    raise ExchangeError(400)
                 if self.known_execution_price(symbol, order)[0] is not None: return order
                 record = self.executions.get(self.execution_key(symbol, order_id))
                 if record: self.remember_unpriced_fill(symbol, order, record['options'], record['side'])
@@ -283,9 +295,9 @@ class DurableExecution:
             if pos is None or pos['amount'] != filled:
                 previous_pos = pos
                 try:
-                    pos = make_position(side, actual, filled, leverage,
+                    pos = self.build_entry_position(side, actual, filled, leverage,
                     options.get('exit_atr', actual * self.cfg['atr']['fallback_atr_pct']), risk_cfg,
-                    options.get('equity', self.equity), self.fee_rate,
+                    options.get('equity', self.equity), options,
                     opened_at=previous_pos['opened_at'] if previous_pos else datetime.fromisoformat(trade['timestamp']).timestamp(),
                     signal_id=pos.get('signal_id') if pos else order['clientOrderId'],
                     atr_source=options.get('atr_source', 'fallback'))
@@ -459,7 +471,9 @@ class DurableExecution:
             current_ids = set(self.intents) - previous_ids
             symbol_scoped = False
             reducing = bool((params or {}).get('reduceOnly'))
-            if isinstance(error, OrderValidationError) and not current_ids and not reducing:
+            rejected_before_send = (self.execution_stage == 'entry_post' and current_ids
+                                    and all(self.intents[cid]['status'] == 'rejected' for cid in current_ids))
+            if isinstance(error, OrderValidationError) and not reducing and (not current_ids or rejected_before_send):
                 self.journal.log('entry_validation_blocked', symbol=symbol, stage='before_post',
                     error_type=type_name(error), reason=str(error), recovery_action='no_order_sent')
                 raise
@@ -516,7 +530,8 @@ class DurableExecution:
             if options.get('reduceOnly'): break
             if intent['symbol'] != symbol or intent['type'] != 'market' or intent['status'] == 'rejected': continue
             record = self.executions.get(self.execution_key(intent['symbol'], intent.get('order_id')))
-            if not record or record['order'].get('status') not in TERMINAL or not record.get('trade'):
+            if (not record or record['order'].get('status') not in TERMINAL
+                    or not record.get('trade') and Decimal(str(record['order'].get('executedQty', -1))) != 0):
                 await self.recover_execution()
                 record = self.executions.get(self.execution_key(symbol, intent.get('order_id')))
                 if not record or record['order'].get('status') not in TERMINAL:
@@ -545,8 +560,8 @@ class DurableExecution:
             expected = float(options.get('expected_price') or (await self.fetch_ticker(symbol))['last'])
             options['expected_price'] = expected
             try:
-                planned = make_position(side, expected, amount, leverage,
-                    options.get('exit_atr', expected * self.cfg['atr']['fallback_atr_pct']), risk_cfg, self.equity, self.fee_rate)
+                planned = self.build_entry_position(side, expected, amount, leverage,
+                    options.get('exit_atr', expected * self.cfg['atr']['fallback_atr_pct']), risk_cfg, self.equity, options)
             except (ValueError, RuntimeError):
                 raise OrderValidationError('risk_levels_unavailable_before_entry') from None
             self.validate_initial_protection(symbol, planned)
@@ -564,12 +579,20 @@ class DurableExecution:
             maximum = self.market(symbol)['limits']['amount'].get('max', float('inf'))
             amount = min(amount, abs(residual), maximum)
             validate_quantity(self.market(symbol), self.amount_to_precision(symbol, amount))
+        if not options.get('reduceOnly'):
+            self.validate_entry_submission(symbol, options)
         self.execution_stage = 'close_post' if options.get('reduceOnly') else 'entry_post'
         result = await safe_create_order(self, {'symbol': symbol, 'type': type, 'side': side, 'amount': amount, 'params': options}, self.journal)
         self._remember_order(symbol, result, options, side)
         self.execution_stage = 'fill_settlement'
         try:
-            result = await self.settle_fill(symbol, result)
+            if options.get('apex_plan'):
+                result = await self.settle_fill(symbol, result, allow_empty=True)
+                if Decimal(str(result['executedQty'])) == 0:
+                    self.journal.log('apex_entry_unfilled', symbol=symbol, order_id=result['orderId'])
+                    return None
+            else:
+                result = await self.settle_fill(symbol, result)
         except ExecutionUnknown as error:
             latest = self.intents[result['clientOrderId']].get('response', result)
             stored = self.executions.get(self.execution_key(symbol, result['orderId']))

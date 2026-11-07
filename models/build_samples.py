@@ -30,9 +30,11 @@ class SampleBuilder:
 
     def apply(self, row):
         symbol, now = row["symbol"], row["received_ms"]
-        before = self.replay.pending
+        before = self.replay.orders.pending.get(symbol)
         self.replay.apply(row)
-        state = self.replay.states[symbol]
+        state = self.replay.states.get(symbol)
+        if state is None:
+            return None
         obs = self.active.get(symbol)
         sample = None
         if obs is not None:
@@ -45,12 +47,12 @@ class SampleBuilder:
                 if sample is not None:
                     del self.active[symbol]
         if before is not None:
-            decision = before[1]
+            decision = before.decision
             selected = decision.signal.symbol
             position = self.replay.open.get(selected)
             if (selected not in self.active and position is not None
                     and position.exit.opened_ms == now and position.decision.model_inputs is not None
-                    and self.replay.pending is not before):
+                    and position.order_id == before.id):
                 self.active[selected] = Observation(decision, now, position.initial_amount, now)
         return sample
 
@@ -74,7 +76,7 @@ class SampleBuilder:
         else:
             return None
         asof = d.signal.asof_ms
-        return Sample(asof, asof, now, list(d.model_inputs), result)
+        return Sample(asof, asof, now, list(d.model_inputs), result, d.data_provenance)
 
 
 def main():

@@ -1,0 +1,28 @@
+name: Offline verification
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  verification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        python: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+      - run: python -m pip install -r requirements-dev.txt
+      - run: python -m compileall -q apex exchange infra market_data models portfolio regime research risk strategies tools run_bot.py run_demo.py
+      - run: git diff --check HEAD^ HEAD
+      - run: python -m pytest -q
+      - run: python -m tools.audit_secrets

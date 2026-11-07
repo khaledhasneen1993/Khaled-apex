@@ -8,7 +8,8 @@ from pathlib import Path
 
 from apex.config import Config
 from apex.engine import Engine, Instrument
-from market_data.features import MarketState
+from apex.order_manager import OrderManager
+from market_data.events import apply_market_row
 from models.meta import Model
 from portfolio.limits import check, correlations, risk_multiplier
 from risk.apex_exit import Exit
@@ -29,6 +30,7 @@ class OpenPosition:
     exit_reason: str | None = None
     scaled_quantity: float = 0.
     initial_amount: float = 0.
+    order_id: str | None = None
     closed_pnl: float = 0.
     exit_value: float = 0.
     total_fees: float = 0.
@@ -66,11 +68,12 @@ class Replay:
         self.exit_type = exit_type
         self.depth_versions = {}
         self.exit_fill_count = self.partial_entries = 0
-        self.pending = None
+        self.orders = OrderManager()
         self.started = self.clock = self.next_batch = None
         self.last_prices, self.last_rejections = {}, {}
         self.config_hash = engine.cfg.fingerprint
         self.exposure_ms = self.missing = self.funding_events = 0
+        self.feed_resets = {}
 
     def apply(self, row):
         now, symbol, kind, data = (row[k] for k in ("received_ms", "symbol", "kind", "data"))
@@ -81,33 +84,27 @@ class Replay:
         if self.open:
             self.exposure_ms += now-self.clock
         self.clock = now
-        state = self.states.setdefault(symbol, MarketState(symbol))
+        if kind == "session_boundary":
+            for order in tuple(self.orders.pending.values()):
+                self.reject_order(order, now, "PAPER_SESSION_BOUNDARY", "CANCELED")
+            self.states.clear()
+            self.depth_versions.clear()
+            self.next_batch = now+self.engine.cfg.rank_window_ms
+            return
         cfg = self.engine.cfg
+        if kind in ("reset_depth", "reset_market"):
+            self.feed_resets[symbol] = self.feed_resets.get(symbol, 0)+1
         try:
-            if kind == "event":
-                state.ingest(data, now, cfg.max_age_ms)
-            elif kind == "snapshot":
-                state.book.snapshot(data)
-            elif kind == "reset_depth":
-                state.book.invalidate()
-                state.flows.clear()
-            elif kind == "reset_market":
-                book, flows = state.book, state.flows
-                state.disconnect()
-                state.book, state.flows = book, flows
-            elif kind == "candles":
-                for candle in data:
-                    if int(candle[0])+60000 <= now:
-                        state.add_candle(int(candle[0]), *(float(v) for v in candle[1:6]))
-            elif kind == "open_interest":
-                state.open_interest(data, now)
-            elif kind == "funding_settlement":
+            if kind == "funding_settlement":
                 self.funding(symbol, now, data)
-            else:
-                raise ValueError("Unknown replay event")
+                self.process_orders(now, symbol)
+                return
+            state = apply_market_row(self.states, row, cfg.max_age_ms)
         except (ValueError, KeyError, TypeError, OverflowError):
             self.missing += 1
-            state.disconnect()
+            if symbol in self.states:
+                self.states[symbol].disconnect()
+            self.process_orders(now, symbol)
             return
         if state.book.fresh(now, cfg.max_age_ms):
             self.last_prices[symbol] = state.book.quote.mid
@@ -115,30 +112,81 @@ class Replay:
                 self.depth_versions[symbol] = state.book.last, state.book.event_ms
                 self.liquidity.observe(symbol, state.book)
                 self.manage(symbol, now)
-        if self.pending and now >= self.pending[0]:
-            self.fill(now)
+        self.process_orders(now, symbol)
         if now >= self.next_batch:
             self.next_batch = now+cfg.rank_window_ms
-            if self.pending is None:
-                equity = self.mark_equity()
-                margin = sum(p.amount*p.exit.entry/cfg.leverage for p in self.open.values())
-                decisions, rejected = self.engine.decide(
-                    self.states, now, equity, max(0., self.balance-margin), self.high_water,
-                    [p.decision.exposure for p in self.open.values()], self.correlations(now))
-                current_rejections = set(rejected)
-                self.signals.extend(dict(time=now, symbol=s, reason=reason, config=self.config_hash)
-                                    for s, reason in sorted(current_rejections - self.last_rejections.keys()))
-                self.last_rejections = dict.fromkeys(current_rejections)
-                if decisions:
-                    self.pending = now+self.latency, decisions[0]
-                    decision = decisions[0]
-                    signal = decision.signal
-                    self.signals.append(dict(time=now, symbol=signal.symbol, strategy=signal.strategy,
-                                             regime=signal.regime, reason="SHADOW_CANDIDATE",
-                                             confidence=signal.confidence, edge_proxy=decision.net_edge_proxy,
-                                             slippage=decision.slippage, risk=decision.plan.equity_risk,
-                                             stop=decision.plan.stop, model=decision.model, config=self.config_hash))
             self.sample_equity()
+            self.select_orders(now)
+
+    def process_orders(self, now, symbol):
+        for order in tuple(self.orders.pending.values()):
+            if now > order.expires:
+                self.reject_order(order, now, "EXPIRED_BEFORE_FILL", "EXPIRED")
+            elif order.decision.signal.symbol == symbol and now >= order.due:
+                self.fill(order, now)
+
+    def used_margin(self):
+        leverage = self.engine.cfg.leverage
+        return sum(p.amount*p.exit.entry/leverage for p in self.open.values())
+
+    def position_exposure(self, symbol, position):
+        cfg = self.engine.cfg
+        entry = position.exit.entry
+        mark = self.last_prices.get(symbol, entry)
+        sign = 1 if position.exit.side == "buy" else -1
+        worst = position.exit.stop*(1-sign*cfg.max_slippage)
+        risk = position.amount*max(0., sign*(entry-worst)+cfg.fee*(entry+worst))
+        return replace(position.decision.exposure, notional=position.amount*mark, stop_risk=risk)
+
+    def exposures(self, excluding=None):
+        positions = [self.position_exposure(s, p) for s, p in self.open.items()]
+        return positions+self.orders.exposures(excluding)
+
+    def select_orders(self, now):
+        cfg = self.engine.cfg
+        equity = self.mark_equity()
+        margin = self.used_margin()
+        correlated = self.correlations(now)
+        decisions, rejected = self.engine.decide(
+            self.states, now, equity, max(0., self.balance-margin-self.orders.margin),
+            self.high_water, self.exposures(), correlated)
+        for decision in decisions:
+            signal = decision.signal
+            symbol = signal.symbol
+            if symbol in self.open or symbol in self.orders.pending:
+                rejected.append((symbol, "SYMBOL_ALREADY_RESERVED_OR_OPEN"))
+                continue
+            if len(self.open)+len(self.orders.pending) >= cfg.max_positions:
+                rejected.append((symbol, "POSITION_LIMIT"))
+                continue
+            if reason := check(self.exposures(), decision.exposure, equity, self.high_water, correlated, cfg):
+                rejected.append((symbol, reason))
+                continue
+            if now+self.latency > signal.asof_ms+cfg.max_age_ms:
+                rejected.append((symbol, "SIGNAL_EXPIRES_BEFORE_LATENCY"))
+                continue
+            p = decision.plan
+            reserve = self.orders.required_margin(decision, cfg)
+            if margin+self.orders.margin+reserve > self.balance:
+                rejected.append((symbol, "INSUFFICIENT_UNRESERVED_MARGIN"))
+                continue
+            order = self.orders.reserve(decision, now, self.latency, cfg)
+            self.signals.append(dict(time=now, symbol=symbol, strategy=signal.strategy,
+                                     regime=signal.regime, reason="SHADOW_CANDIDATE", order_id=order.id,
+                                     confidence=signal.confidence, score=decision.net_edge_proxy,
+                                     score_kind=decision.score_kind,
+                                     slippage=decision.slippage, risk=p.equity_risk, stop=p.stop,
+                                     model=decision.model, config=self.config_hash))
+        current_rejections = set(rejected)
+        self.signals.extend(dict(time=now, symbol=s, reason=reason, config=self.config_hash)
+                            for s, reason in sorted(current_rejections-self.last_rejections.keys()))
+        self.last_rejections = dict.fromkeys(current_rejections)
+
+    def reject_order(self, order, now, reason, status="REJECTED"):
+        self.orders.finish(order, now, status, reason)
+        signal = order.decision.signal
+        self.signals.append(dict(time=now, symbol=signal.symbol, strategy=signal.strategy,
+                                 reason=reason, order_id=order.id, config=self.config_hash))
 
     def correlations(self, now):
         closed_returns = {}
@@ -156,20 +204,15 @@ class Replay:
         self.high_water = max(self.high_water, equity)
         self.equity.append(equity)
 
-    def fill(self, now):
-        due, decision = self.pending
+    def fill(self, order, now):
+        decision = order.decision
         cfg, signal = self.engine.cfg, decision.signal
         state = self.states[signal.symbol]
         book = state.book
-        if now-signal.asof_ms > cfg.max_age_ms:
-            self.pending = None
-            self.rejected_fill(now, signal, "EXPIRED_BEFORE_FILL")
+        if not book.fresh(now, cfg.max_age_ms) or book.received_ms < order.due:
             return
-        if not book.fresh(now, cfg.max_age_ms) or book.received_ms < due:
-            return
-        self.pending = None
         if signal.symbol in self.open or state.features(now, cfg) is None:
-            self.rejected_fill(now, signal, "STALE_MARKET_DATA_AT_FILL")
+            self.reject_order(order, now, "STALE_MARKET_DATA_AT_FILL")
             return
         sign = 1 if signal.side == "buy" else -1
         instrument = self.engine.instruments[signal.symbol]
@@ -179,7 +222,7 @@ class Replay:
                                     instrument.step, self.stress, partial=self.experiment.partial_fills,
                                     limit=limit)
         if fill is None:
-            self.rejected_fill(now, signal, "INSUFFICIENT_DEPTH_WITHIN_SLIPPAGE_LIMIT")
+            self.reject_order(order, now, "INSUFFICIENT_DEPTH_WITHIN_SLIPPAGE_LIMIT")
             return
         qty, price = fill.quantity, fill.price
         realized_slippage = sign*(price/signal.reference-1)
@@ -188,26 +231,25 @@ class Replay:
         loss = qty*(sign*(price-worst_exit)+cfg.fee*(price+worst_exit))
         if (sign*(price-decision.plan.stop) <= 0 or sign*(decision.plan.target-price) <= 0
                 or loss > decision.plan.stop_risk * (qty/decision.plan.quantity)
-                or price*qty < instrument.min_notional):
-            self.rejected_fill(now, signal, "FILL_RISK_OR_MINIMUM_NOTIONAL")
+                or qty < instrument.min_qty or price*qty < instrument.min_notional):
+            self.reject_order(order, now, "FILL_RISK_OR_MINIMUM_NOTIONAL")
             return
         equity = self.mark_equity()
         multiplier = risk_multiplier(equity, self.high_water, cfg)
         if loss > equity*cfg.risk_fraction*multiplier:
-            self.rejected_fill(now, signal, "RISK_BUDGET_CHANGED_AT_FILL")
+            self.reject_order(order, now, "RISK_BUDGET_CHANGED_AT_FILL")
             return
         if not validate_stop_against_liq(signal.side, price, worst_exit, cfg.leverage,
                                         cfg.mmr, cfg.liquidation_buffer, 0., qty):
-            self.rejected_fill(now, signal, "LIQUIDATION_BUFFER_AT_FILL")
+            self.reject_order(order, now, "LIQUIDATION_BUFFER_AT_FILL")
             return
         exposure = replace(decision.exposure, notional=price*qty, stop_risk=loss)
-        current = [p.decision.exposure for p in self.open.values()]
+        current = self.exposures(excluding=order)
         if reason := check(current, exposure, equity, self.high_water, self.correlations(now), cfg):
-            self.rejected_fill(now, signal, reason)
+            self.reject_order(order, now, reason)
             return
-        used = sum(p.amount*p.exit.entry/cfg.leverage for p in self.open.values())
-        if used+price*qty/cfg.leverage+fee > self.balance:
-            self.rejected_fill(now, signal, "INSUFFICIENT_MARGIN_AT_FILL")
+        if self.used_margin()+self.orders.margin-order.margin+price*qty/cfg.leverage+fee > self.balance:
+            self.reject_order(order, now, "INSUFFICIENT_MARGIN_AT_FILL")
             return
         decision = replace(decision, exposure=exposure)
         self.balance -= fee
@@ -215,11 +257,10 @@ class Replay:
         self.partial_entries += qty < decision.plan.quantity
         self.open[signal.symbol] = OpenPosition(decision, self.exit_type(signal.side, price, decision.plan.stop,
                                                               decision.plan.target, now),
-                                                qty, fee, realized_slippage, initial_amount=qty)
-
-    def rejected_fill(self, now, signal, reason):
-        self.signals.append(dict(time=now, symbol=signal.symbol, strategy=signal.strategy,
-                                 reason=reason, config=self.config_hash))
+                                                qty, fee, realized_slippage, initial_amount=qty, order_id=order.id)
+        self.orders.finish(order, now, "PARTIAL_FILL" if qty < order.decision.plan.quantity else "FILLED",
+                           "IOC_REMAINDER_CANCELED" if qty < order.decision.plan.quantity else None,
+                           qty, price, fee)
 
     def funding(self, symbol, now, data):
         ts, rate, mark = int(data["settled_ms"]), float(data["rate"]), float(data["mark"])
@@ -282,7 +323,7 @@ class Replay:
         if reason == "SCALE_OUT":
             p.scaled_quantity += quantity
         self.exit_fill_count += 1
-        self.exit_fills.append(dict(symbol=symbol, time=now, amount=quantity, price=price,
+        self.exit_fills.append(dict(symbol=symbol, order_id=p.order_id, time=now, amount=quantity, price=price,
                                     reason=reason, fees=entry_fee+fee, funding=funding, net_pnl=net))
         if not isclose(quantity, p.amount, rel_tol=1e-12, abs_tol=step*1e-8):
             p.amount -= quantity
@@ -292,7 +333,7 @@ class Replay:
             p.decision = replace(p.decision, exposure=replace(
                 exposure, notional=p.amount*p.exit.entry, stop_risk=exposure.stop_risk*(1-fraction)))
             return
-        self.trades.append(dict(symbol=symbol, side=p.exit.side, strategy=p.decision.signal.strategy,
+        self.trades.append(dict(symbol=symbol, order_id=p.order_id, side=p.exit.side, strategy=p.decision.signal.strategy,
                                 regime=p.decision.signal.regime, opened_ms=p.exit.opened_ms, closed_ms=now,
                                 amount=p.initial_amount, entry=p.exit.entry, exit=p.exit_value/p.initial_amount,
                                 reason=reason, slippage=p.slippage, stop=p.exit.stop,
@@ -310,20 +351,26 @@ class Replay:
         ) for symbol, state in self.states.items()}
         return dict(fidelity="public_event_shadow", config=self.config_hash, missing_events=self.missing,
                     safety_state="ready" if feeds and all(x["data_ready"] for x in feeds.values()) else "degraded",
-                    feed_health=feeds, model_version=self.engine.model.version if self.engine.model else None,
+                    feed_health=feeds, feed_resets=dict(self.feed_resets), model_version=self.engine.model.version if self.engine.model else None,
                     funding_settlements=self.funding_events, elapsed_ms=elapsed,
                     latency_ms=self.latency, stress_slippage=self.stress,
                     execution_experiment=vars(self.experiment), partial_entries=self.partial_entries,
                     exit_fill_count=self.exit_fill_count,
                     initial_equity=self.initial, final_equity=self.mark_equity(), wallet=self.balance,
+                    reserved_margin=self.orders.margin, used_margin=self.used_margin(),
+                    free_margin=max(0., self.balance-self.used_margin()-self.orders.margin),
+                    reserved_risk=sum(p.stop_risk for p in self.orders.exposures()),
+                    pending_orders=[dict(id=o.id, symbol=s, due=o.due, expires=o.expires,
+                                         quantity=o.decision.plan.quantity, margin=o.margin)
+                                    for s, o in self.orders.pending.items()],
                     open_positions=[dict(symbol=s, side=p.exit.side, amount=p.amount, entry=p.exit.entry,
                                          stop=p.exit.stop, target=p.exit.target, opened_ms=p.exit.opened_ms,
-                                         risk=p.decision.exposure.stop_risk, exit_pending=p.exit_reason, strategy=p.decision.signal.strategy,
+                                         risk=self.position_exposure(s, p).stop_risk, exit_pending=p.exit_reason, strategy=p.decision.signal.strategy,
                                          regime=p.decision.signal.regime) for s, p in self.open.items()],
                     exposure_fraction=self.exposure_ms/elapsed if elapsed else None,
                     trades_per_day=len(self.trades)*86400000/elapsed if elapsed else None,
-                    aggregate_stop_risk=sum(p.decision.exposure.stop_risk for p in self.open.values()),
-                    gross_exposure=sum(p.decision.exposure.notional for p in self.open.values()),
+                    aggregate_stop_risk=sum(self.position_exposure(s, p).stop_risk for s, p in self.open.items()),
+                    gross_exposure=sum(self.position_exposure(s, p).notional for s, p in self.open.items()),
                     unrealized_pnl=self.mark_equity()-self.balance,
                     realized_pnl_including_partial_exits=sum(fill["net_pnl"] for fill in self.exit_fills),
                     metrics=summary(self.trades, self.equity),
@@ -343,8 +390,8 @@ class Replay:
 def export(replay, destination):
     destination.mkdir(parents=True, exist_ok=False)
     (destination/"report.json").write_text(json.dumps(replay.report(), indent=2, allow_nan=False)+"\n")
-    for name in ("trades", "signals", "exit_fills"):
-        rows = getattr(replay, name)
+    for name in ("trades", "signals", "exit_fills", "orders"):
+        rows = replay.orders.events if name == "orders" else getattr(replay, name)
         (destination/f"{name}.json").write_text(json.dumps(rows, indent=2, allow_nan=False)+"\n")
         with (destination/f"{name}.csv").open("w", newline="") as stream:
             columns = sorted({key for row in rows for key in row})

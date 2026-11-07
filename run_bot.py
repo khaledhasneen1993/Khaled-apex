@@ -26,7 +26,16 @@ def main():
     configure()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--state', help='State filename; live state is isolated by mode')
+    from apex.runtime import add_arguments, paper_main
+    parser.add_argument('--strategy', choices=('legacy', 'apex'), default='legacy')
+    add_arguments(parser)
     args = parser.parse_args()
+    if args.strategy == 'apex':
+        if args.state:
+            parser.error('Use --apex-session for Apex Paper')
+        return paper_main(args, parser)
+    if args.new_session or args.instruments or args.export or args.equity is not None or args.thesis_timeout_ms:
+        parser.error('Apex session options require --strategy apex')
     cfg = load_config()
     state = args.state or cfg['exchange']['state_filename']
     if cfg['exchange']['mode'] == 'paper' and args.state is None:

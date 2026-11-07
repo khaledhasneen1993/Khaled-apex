@@ -1,5 +1,6 @@
 """Local, cached health reads: no exchange requests in HTTP handlers."""
 import time
+from hashlib import sha256
 from aiohttp import web
 from infra.circuit_breaker import BreakerState
 
@@ -14,7 +15,16 @@ class HealthServer:
         age = max(0., time.time() - safety.kill.state.last_ws_heartbeat)
         process = getattr(getattr(bot, 'process_watchdog', None), 'process', None)
         resources = {'memory_bytes': process.memory_info().rss, 'open_fds': process.num_fds()} if process else {}
-        return {**resources, 'mode': getattr(bot, 'execution_mode', 'unknown'), 'closed_trades': len([t for t in bot.exchange.trades if t.get('exit_detail')]) if hasattr(bot.exchange, 'trades') else 0,
+        approval = getattr(bot, 'approval', None)
+        qualification = {}
+        if approval is not None:
+            exchange = bot.exchange
+            qualification = dict(profile='apex-qualification', approval_fingerprint=approval.digest,
+                session_id=sha256(exchange.fence.owner.encode()).hexdigest() if exchange.fence else None,
+                missing_native_stops=sum(not p.get('protection', {}).get('sl') for p in bot.positions.values()),
+                unresolved_execution=bool(exchange.execution_fault or any(
+                    i.get('status') == 'pending' for i in exchange.intents.values())))
+        return {**resources, **qualification, 'mode': getattr(bot, 'execution_mode', 'unknown'), 'closed_trades': len([t for t in bot.exchange.trades if t.get('exit_detail')]) if hasattr(bot.exchange, 'trades') else 0,
                 'observe_events': getattr(safety, 'kill_observation_count', 0), 'status': 'healthy' if safety.ready and not safety.storage_failed and age < safety.kill.cfg['ws_timeout_sec'] and not safety.kill.blocks_entries and not getattr(bot.exchange, 'storage_fault', False) and getattr(getattr(bot.exchange, 'breaker', None), 'state', None) in (None, BreakerState.CLOSED) else 'degraded',
                 'uptime_sec': time.monotonic() - self.started,
                 'last_ws_message_age_sec': age, 'open_positions': len(bot.positions),

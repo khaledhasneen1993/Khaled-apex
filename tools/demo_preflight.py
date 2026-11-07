@@ -94,6 +94,7 @@ async def preflight(exchange, symbol, websocket=True):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--symbol')
+    parser.add_argument('--strategy', choices=('legacy', 'apex'), default='legacy')
     args = parser.parse_args()
     async def run():
         cfg = demo_config()
@@ -101,6 +102,13 @@ def main():
         exchange = ReadOnlyDemo(cfg, TokenBucket(ec['rate_per_sec'], ec['rate_burst']))
         try:
             result = await preflight(exchange, args.symbol or cfg['demo']['preflight_symbol'])
+            if args.strategy == 'apex':
+                from apex.demo_execution import DEMO_BLOCKERS
+                mode = await exchange._request('GET', '/fapi/v1/positionSide/dual', retry=True)
+                one_way = mode.get('dualSidePosition') is False
+                result.update(apex_one_way=one_way, apex_release_blockers=DEMO_BLOCKERS,
+                              apex_submission_enabled=False)
+                result['requires_operator_review'] |= not one_way
             print(json.dumps(result, indent=2))
             if result['requires_operator_review']: raise SystemExit(2)
         finally: await exchange.close()

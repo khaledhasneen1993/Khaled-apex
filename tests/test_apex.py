@@ -203,7 +203,7 @@ def test_replay_uses_post_latency_depth_and_exports_funded_close(tmp_path):
         replay.apply(dict(received_ms=MINUTE+t, symbol=SYMBOL, kind=kind, data=data))
     emit("event", 5001, trade(4, MINUTE+5001, qty=1))
     emit("event", 5080, depth(103, 103, 102, MINUTE+5080))
-    assert replay.pending and not replay.open
+    assert replay.orders.pending and not replay.open
     emit("event", 5180, trade(5, MINUTE+5180, qty=1))
     assert not replay.open
     emit("event", 5181, depth(104, 104, 103, MINUTE+5181))
@@ -319,7 +319,7 @@ def test_replay_partial_entry_and_sticky_stop_keep_funding_and_fees():
 
     emit("event", 5001, trade(4, MINUTE+5001, qty=1))
     emit("event", 5080, depth(103, 103, 102, MINUTE+5080))
-    planned = replay.pending[1].plan.quantity
+    planned = replay.orders.pending[SYMBOL].decision.plan.quantity
     emit("event", 5181, depth(104, 104, 103, MINUTE+5181, ask=[[102.01, .100]]))
     position = replay.open[SYMBOL]
     assert planned > position.amount == .100
@@ -431,7 +431,7 @@ def test_delayed_fill_rechecks_reduced_risk_budget():
 
     emit(5001, trade(4, MINUTE+5001, qty=1))
     emit(5080, depth(103, 103, 102, MINUTE+5080))
-    assert replay.pending
+    assert replay.orders.pending
     replay.balance = 97.
     emit(5181, depth(104, 104, 103, MINUTE+5181))
     assert not replay.open

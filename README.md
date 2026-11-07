@@ -4,10 +4,11 @@ Khaled Apex مستودع مستقل للبحث الكمي وPaper وShadow عل�
 
 | المسار | التشغيل | الحالة |
 | --- | --- | --- |
-| Paper | `python run_bot.py` | Cascade الموروث مع سقف فعلي للمخاطرة وحساب افتراضي |
+| Legacy Paper | `python run_bot.py` | Cascade الموروث، وهو الوضع الافتراضي |
+| Apex Paper | `python run_bot.py --strategy apex` | قواعد Apex وجلسة محفوظة، بعد إعداد أول مرة |
 | Research | `python -m research.replay --help` | محاكاة مستقلة ببيانات أحداث مدخلة، وتوجد دراسة OHLCV منفصلة |
 | Shadow | `python -m market_data.capture --help` | بيانات عامة وقرارات افتراضية، تهيئة الاتصال الحي قيد التحقق |
-| Demo | `run_demo.py` | Cascade الموروث والتنفيذ الدائم؛ التحقق محلي عبر المحاكي والتشغيل الفعلي معلق |
+| Demo | `run_demo.py --enable-demo` | Legacy للتوافق. مسار Apex مقيد ببوابة اعتماد مغلقة |
 | Mainnet | — | معطل في طبقة التنفيذ |
 
 ## البدء من Termux
@@ -45,3 +46,9 @@ python tools/audit_secrets.py
 - [التنفيذ](docs/EXECUTION.md) و[الأبحاث](docs/BACKTESTING.md)
 - [الأمان](docs/SECURITY.md) و[الحدود الحالية](docs/KNOWN_LIMITATIONS.md)
 - [سجل التغييرات](CHANGELOG.md)
+
+## فرع Final Integration
+
+يتوفر `python run_bot.py --strategy apex` لتشغيل Apex Paper بالقواعد، مع جلسة قابلة للاستئناف وتصدير الصفقات. الوضع الافتراضي هو Legacy Paper. [دليل Apex Paper وTermux](docs/PAPER_RUNBOOK.md)
+
+مسار `run_demo.py --strategy apex --enable-demo` يرفض الاتصال في هذا الإصدار قبل اجتياز بوابات التشغيل والسوق. [دليل Demo](docs/DEMO_RUNBOOK.md) · [نتائج التحقق](reports/APEX_VALIDATION.md)

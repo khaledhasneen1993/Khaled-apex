@@ -7,6 +7,7 @@ from pathlib import Path
 
 from apex.config import Config
 from apex.engine import Decision, Engine, Instrument
+from models.meta import Model
 from portfolio.limits import Exposure, check, risk_multiplier
 from regime.classifier import classify
 from research.replay import Replay
@@ -71,15 +72,19 @@ class ChampionProxy(Engine):
         return decisions, rejected
 
 
-def compare(rows, cfg, instruments, *, latency_ms=100, stress_slippage=0., equity=100.):
+def compare(rows, cfg, instruments, *, latency_ms=100, stress_slippage=0., equity=100., model=None):
     champion = ChampionProxy(cfg, instruments)
     a = Replay(champion, exit_type=ChampionExit, equity=equity, latency_ms=latency_ms, stress_slippage=stress_slippage)
     b = Replay(Engine(cfg, instruments), equity=equity, latency_ms=latency_ms, stress_slippage=stress_slippage)
+    ai = Replay(Engine(cfg, instruments, model), equity=equity, latency_ms=latency_ms,
+                stress_slippage=stress_slippage) if model is not None else None
     count = 0
     for row in rows:
         champion.observations.observe(row)
         a.apply(row)
         b.apply(row)
+        if ai is not None:
+            ai.apply(row)
         count += 1
     baseline, challenger = a.report(), b.report()
     return dict(
@@ -90,6 +95,7 @@ def compare(rows, cfg, instruments, *, latency_ms=100, stress_slippage=0., equit
         closed_net_difference=challenger["metrics"]["net_pnl"]-baseline["metrics"]["net_pnl"],
         marked_equity_difference=b.mark_equity()-a.mark_equity(),
         promotion_eligible=False, champion=baseline, challenger=challenger,
+        apex_ai_candidate=ai.report() if ai is not None else None,
     )
 
 
@@ -102,13 +108,18 @@ def main():
     p.add_argument("--initial-equity", type=float, default=100.)
     p.add_argument("--latency-ms", type=int, default=100)
     p.add_argument("--stress-slippage", type=float, default=0.)
+    p.add_argument("--model", type=Path)
+    p.add_argument("--approval", type=Path)
     args = p.parse_args()
+    if bool(args.model) != bool(args.approval):
+        p.error("--model and --approval must be supplied together")
     cfg = Config.load(args.config)
     instruments = {s: Instrument(**v) for s, v in json.loads(args.instruments.read_text()).items()}
+    model = Model.load_approved(args.model, args.approval, cfg.fingerprint) if args.model else None
     with args.capture.open() as tape:
         result = compare((json.loads(line) for line in tape if line.strip()), cfg, instruments,
                          latency_ms=args.latency_ms, stress_slippage=args.stress_slippage,
-                         equity=args.initial_equity)
+                         equity=args.initial_equity, model=model)
     with args.output.open("x") as f:
         json.dump(result, f, indent=2, allow_nan=False)
 

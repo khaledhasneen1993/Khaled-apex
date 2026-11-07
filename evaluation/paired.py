@@ -10,23 +10,19 @@ from apex.engine import Engine
 from regime.classifier import classify
 from research.replay import Replay
 from strategies.signals import generate
+from strategies.legacy import cascade_signal, imbalance_matches
 
 
 def champion_prefilter(rows, book, now, age, *, movement=.012, volume=3.5, imbalance=.35):
     if len(rows) < 15 or not book.fresh(now, age):
         return None
-    change = rows[-1][4]/rows[-3][4]-1
-    reference = sum(r[5] for r in rows[-15:-3])/12
-    if reference <= 0 or abs(change) <= movement or rows[-1][5]/reference <= volume:
+    signal = cascade_signal(rows, movement, volume)
+    if signal is None:
         return None
     bids = sum(q for _, q in sorted(book.bids.items(), reverse=True)[:20])
     asks = sum(q for _, q in sorted(book.asks.items())[:20])
     flow = (bids-asks)/(bids+asks)
-    if change > 0 and flow > imbalance:
-        return "buy"
-    if change < 0 and flow < -imbalance:
-        return "sell"
-    return None
+    return signal["side"] if imbalance_matches(signal["side"], flow, imbalance) else None
 
 
 class CandleObservations:

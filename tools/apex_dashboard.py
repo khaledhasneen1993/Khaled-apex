@@ -2,10 +2,11 @@
 import argparse
 from html import escape
 import json
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-ARTIFACTS = ("report.json", "signals.json", "signals.csv", "trades.json", "trades.csv", "exit_fills.json", "exit_fills.csv")
+ARTIFACTS = ("report.json", "signals.json", "signals.csv", "trades.json", "trades.csv", "exit_fills.json", "exit_fills.csv", "orders.json", "orders.csv", "status.json")
 
 
 def page(report, signals):
@@ -15,15 +16,19 @@ def page(report, signals):
         ("Unrealized PnL", report["unrealized_pnl"]), ("Aggregate stop risk", report["aggregate_stop_risk"]),
         ("Gross exposure", report["gross_exposure"]), ("Safety state", report["safety_state"]),
         ("Model", report["model_version"] or "rules-only"),
+        ("Free margin", report.get("free_margin")), ("Reserved margin", report.get("reserved_margin")),
+        ("Reserved risk", report.get("reserved_risk")),
     )
     facts = "".join(f"<dt>{escape(label)}</dt><dd>{escape(str(value))}</dd>" for label, value in cards)
     details = "".join(f"<h2>{label}</h2><pre>{escape(json.dumps(data, indent=2))}</pre>"
                       for label, data in (("Feed health", report["feed_health"]),
                                           ("Positions", report["open_positions"]),
+                                          ("Pending orders", report.get("pending_orders", [])),
                                           ("Recent signal decisions", signals[-50:])))
     links = " · ".join(f'<a href="/{name}">{name}</a>' for name in ARTIFACTS)
+    refresh = '<meta http-equiv="refresh" content="5">' if report.get("running") else ""
     return f"""<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width">
-    <title>Khaled Apex · Shadow</title><style>
+    {refresh}<title>Khaled Apex · Shadow</title><style>
     body{{max-width:75rem;margin:2rem auto;padding:0 1.25rem;font:1rem system-ui;color:#e8eef9;background:#101827}}
     h1,h2{{font-weight:600}} dl{{display:grid;grid-template-columns:repeat(auto-fit,minmax(10rem,1fr));gap:1rem}}
     dt{{color:#a4bad6}} dd{{margin:0}} pre{{padding:1rem;background:#192539;overflow:auto}} a{{color:#84ddcb}}
@@ -40,8 +45,13 @@ def serve(directory, port):
             name = self.path.removeprefix("/")
             try:
                 if name == "":
-                    report = json.loads((directory/"report.json").read_text())
-                    signals = json.loads((directory/"signals.json").read_text())
+                    status_path = directory/"status.json"
+                    report = json.loads((status_path if status_path.is_file() else directory/"report.json").read_text())
+                    if report.get("running") and time.time_ns()//1_000_000-report.get("updated_ms", 0) > 6000:
+                        report.update(running=False, safety_state="degraded")
+                    signals_path = directory/"signals.json"
+                    signals = (json.loads(signals_path.read_text()) if signals_path.is_file()
+                               else report.get("recent_signals", []))
                     body = page(report, signals).encode()
                     content_type = "text/html; charset=utf-8"
                 elif name in ARTIFACTS:

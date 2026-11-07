@@ -17,7 +17,7 @@ class Plan:
     equity_risk: float
 
 
-def plan(signal, features, cfg, equity, free, step, min_notional, slippage, risk_multiplier=1.):
+def plan(signal, features, cfg, equity, free, step, min_notional, slippage, risk_multiplier=1., *, min_qty=0., max_qty=None):
     if (not all(isfinite(x) for x in (equity, free, step, min_notional, slippage, risk_multiplier))
             or min(equity, free, step, risk_multiplier) <= 0 or risk_multiplier > 1
             or min_notional < 0 or not 0 <= slippage <= cfg.max_slippage):
@@ -37,12 +37,16 @@ def plan(signal, features, cfg, equity, free, step, min_notional, slippage, risk
     loss_per_unit = worst_entry*(distance+slippage+cfg.max_slippage
                                 +cfg.fee*(2+distance+cfg.max_slippage))
     budget = equity*cfg.risk_fraction*risk_multiplier
-    max_qty = min(budget/loss_per_unit, equity*cfg.margin_fraction*cfg.leverage/worst_entry,
+    max_qty_from_budget = min(budget/loss_per_unit, equity*cfg.margin_fraction*cfg.leverage/worst_entry,
                   free/(worst_entry*(1/cfg.leverage+cfg.fee)))
+    if max_qty is not None:
+        max_qty = min(max_qty, max_qty_from_budget)
+    else:
+        max_qty = max_qty_from_budget
     quantum = Decimal(str(step))
     qty = float((Decimal(str(max_qty))/quantum).to_integral_value(rounding=ROUND_FLOOR)*quantum)
     notional = qty*p
-    if qty <= 0 or notional < min_notional:
+    if qty <= 0 or qty < min_qty or notional < min_notional:
         raise ValueError("BELOW_MINIMUM_NOTIONAL")
     risk = qty*loss_per_unit
     return Plan(qty, notional, qty*worst_entry/cfg.leverage, p*(1-sign*distance),

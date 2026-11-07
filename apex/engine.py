@@ -14,9 +14,13 @@ from strategies.signals import generate
 class Instrument:
     step: float
     min_notional: float
+    min_qty: float = 0.
+    max_qty: float | None = None
 
     def __post_init__(self):
-        if not isfinite(self.step) or not isfinite(self.min_notional) or self.step <= 0 or self.min_notional < 0:
+        if (not all(isfinite(v) for v in (self.step, self.min_notional, self.min_qty))
+                or self.step <= 0 or min(self.min_notional, self.min_qty) < 0
+                or self.max_qty is not None and (not isfinite(self.max_qty) or self.max_qty < max(self.step, self.min_qty))):
             raise ValueError("Invalid instrument filters")
 
 
@@ -29,6 +33,7 @@ class Decision:
     slippage: float
     model: str | None
     model_inputs: tuple | None = None
+    score_kind: str = "HEURISTIC_SCORE"
 
 
 class Engine:
@@ -53,10 +58,14 @@ class Engine:
                 rejected.append((symbol, "MISSING_INSTRUMENT_FILTERS"))
                 continue
             for signal in generate(f, regime, cfg):
+                if signal.strategy not in cfg.enabled_strategies:
+                    rejected.append((symbol, "STRATEGY_DISABLED:"+signal.strategy))
+                    continue
                 try:
                     instrument = self.instruments[symbol]
                     order = plan(signal, f, cfg, equity, free, instrument.step,
-                                 instrument.min_notional, cfg.max_slippage, multiplier)
+                                 instrument.min_notional, cfg.max_slippage, multiplier,
+                                 min_qty=instrument.min_qty, max_qty=instrument.max_qty)
                     slippage = state.book.impact(signal.side, order.quantity)
                     if not isfinite(slippage) or slippage > cfg.max_slippage:
                         raise ValueError("EXCESSIVE_SLIPPAGE")
@@ -71,7 +80,7 @@ class Engine:
                             raise ValueError("MODEL_INFERENCE_FAILED") from None
                         edge = (target*abs(order.target-f.price)-stopped*abs(order.stop-f.price))/f.price-cost
                     if edge <= 0:
-                        raise ValueError("NEGATIVE_EXPECTED_EDGE")
+                        raise ValueError("NONPOSITIVE_STRATEGY_SCORE")
                     exposure = Exposure(symbol, signal.side, order.notional, order.stop_risk, f.long_vol)
                     if reason := check(positions, exposure, equity, high_water, correlated, cfg):
                         raise ValueError(reason)
@@ -80,7 +89,8 @@ class Engine:
                                 if (v := correlated.get(tuple(sorted((symbol, p.symbol))))) is not None), default=0.)
                     candidate = Candidate(signal, edge, slippage, abs(order.stop-f.price)/f.price, corr, f.depth_usdt)
                     proposals.append((candidate, Decision(signal, order, exposure, edge, slippage,
-                                                          self.model.version if self.model else None, inputs)))
+                                                          self.model.version if self.model else None, inputs,
+                                                          "MODEL_RESEARCH_SCORE" if self.model else "HEURISTIC_SCORE")))
                 except ValueError as error:
                     rejected.append((symbol, str(error)))
         indexed = {candidate: decision for candidate, decision in proposals}

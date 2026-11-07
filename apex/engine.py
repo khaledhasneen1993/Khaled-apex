@@ -28,6 +28,7 @@ class Decision:
     net_edge_proxy: float
     slippage: float
     model: str | None
+    model_inputs: tuple | None = None
 
 
 class Engine:
@@ -62,9 +63,10 @@ class Engine:
                     exit_cost = cfg.max_slippage
                     cost = 2*cfg.fee+slippage+exit_cost+abs(f.funding or 0.)
                     edge = signal.gross_edge_proxy-cost
+                    inputs = vector(f, regime, now, cost)
                     if self.model:
                         try:
-                            target, stopped, _ = self.model.probabilities(vector(f, regime, now, cost))
+                            target, stopped, _ = self.model.probabilities(inputs)
                         except (ArithmeticError, TypeError, ValueError):
                             raise ValueError("MODEL_INFERENCE_FAILED") from None
                         edge = (target*abs(order.target-f.price)-stopped*abs(order.stop-f.price))/f.price-cost
@@ -78,7 +80,7 @@ class Engine:
                                 if (v := correlated.get(tuple(sorted((symbol, p.symbol))))) is not None), default=0.)
                     candidate = Candidate(signal, edge, slippage, abs(order.stop-f.price)/f.price, corr, f.depth_usdt)
                     proposals.append((candidate, Decision(signal, order, exposure, edge, slippage,
-                                                          self.model.version if self.model else None)))
+                                                          self.model.version if self.model else None, inputs)))
                 except ValueError as error:
                     rejected.append((symbol, str(error)))
         indexed = {candidate: decision for candidate, decision in proposals}

@@ -5,12 +5,13 @@ import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-ARTIFACTS = ("report.json", "signals.json", "signals.csv", "trades.json", "trades.csv")
+ARTIFACTS = ("report.json", "signals.json", "signals.csv", "trades.json", "trades.csv", "exit_fills.json", "exit_fills.csv")
 
 
 def page(report, signals):
     cards = (
-        ("Equity", report["final_equity"]), ("Realized PnL", report["metrics"]["net_pnl"]),
+        ("Equity", report["final_equity"]),
+        ("Realized PnL", report.get("realized_pnl_including_partial_exits", report["metrics"]["net_pnl"])),
         ("Unrealized PnL", report["unrealized_pnl"]), ("Aggregate stop risk", report["aggregate_stop_risk"]),
         ("Gross exposure", report["gross_exposure"]), ("Safety state", report["safety_state"]),
         ("Model", report["model_version"] or "rules-only"),
@@ -44,7 +45,11 @@ def serve(directory, port):
                     body = page(report, signals).encode()
                     content_type = "text/html; charset=utf-8"
                 elif name in ARTIFACTS:
-                    body = (directory/name).read_bytes()
+                    artifact = directory/name
+                    if not artifact.is_file():
+                        self.send_error(404)
+                        return
+                    body = artifact.read_bytes()
                     content_type = "application/json" if name.endswith(".json") else "text/csv; charset=utf-8"
                 else:
                     self.send_error(404)

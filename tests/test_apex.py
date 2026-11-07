@@ -306,3 +306,161 @@ def test_paper_export_reads_state_without_creating_client(tmp_path):
     source.write_text(json.dumps(dict(settings={"execution_mode": "testnet"}, trades=[])))
     with pytest.raises(ValueError, match="Paper state"):
         export(source, tmp_path/"blocked")
+
+
+def test_replay_partial_entry_and_sticky_stop_keep_funding_and_fees():
+    from research.replay import Experiment
+    replay = Replay(Engine(Config(), {SYMBOL: Instrument(.001, 5.)}),
+                    experiment=Experiment(partial_fills=True))
+    replay.states[SYMBOL] = ready_state()
+
+    def emit(kind, ms, data):
+        replay.apply(dict(received_ms=MINUTE+ms, symbol=SYMBOL, kind=kind, data=data))
+
+    emit("event", 5001, trade(4, MINUTE+5001, qty=1))
+    emit("event", 5080, depth(103, 103, 102, MINUTE+5080))
+    planned = replay.pending[1].plan.quantity
+    emit("event", 5181, depth(104, 104, 103, MINUTE+5181, ask=[[102.01, .100]]))
+    position = replay.open[SYMBOL]
+    assert planned > position.amount == .100
+    emit("funding_settlement", 5300, dict(settled_ms=MINUTE+5300, rate=.0001, mark=102))
+    emit("event", 5400, depth(105, 105, 104, MINUTE+5400, bid=[[101.99, 0], [100, .040]]))
+    assert position.amount == pytest.approx(.06)
+    assert position.exit_reason == "STOP"
+    emit("event", 5500, depth(106, 106, 105, MINUTE+5500))
+    assert len(replay.exit_fills) == 1
+    emit("event", 5600, depth(107, 107, 106, MINUTE+5600, bid=[[100, 0], [101.95, .070]]))
+    assert not replay.open
+    result, = replay.trades
+    assert result["exit"] == pytest.approx((.04*100+.06*101.95)/.1)
+    assert result["net_pnl"] == pytest.approx(replay.balance-100)
+    assert result["funding"] == pytest.approx(.1*102*.0001)
+    assert sum(f["amount"] for f in replay.exit_fills) == pytest.approx(.1)
+    assert replay.report()["partial_entries"] == 1
+
+
+def test_scale_out_is_limit_constrained_and_runs_only_once():
+    from research.replay import Experiment
+    replay = Replay(Engine(Config(), {SYMBOL: Instrument(.001, 5.)}),
+                    experiment=Experiment(scale_out_fraction=.5, scale_out_r=.5))
+    replay.states[SYMBOL] = ready_state()
+
+    def emit(ms, data):
+        replay.apply(dict(received_ms=MINUTE+ms, symbol=SYMBOL, kind="event", data=data))
+
+    emit(5001, trade(4, MINUTE+5001, qty=1))
+    emit(5080, depth(103, 103, 102, MINUTE+5080))
+    emit(5181, depth(104, 104, 103, MINUTE+5181))
+    position = replay.open[SYMBOL]
+    original_risk = position.decision.exposure.stop_risk
+    emit(5400, depth(105, 105, 104, MINUTE+5400,
+                     bid=[[101.99, 0], [102.5, 150]], ask=[[102.01, 0], [102.52, 90]]))
+    fill, = replay.exit_fills
+    assert fill["reason"] == "SCALE_OUT"
+    assert 0 < position.amount < position.initial_amount
+    assert position.decision.exposure.stop_risk < original_risk
+    emit(5500, depth(106, 106, 105, MINUTE+5500))
+    assert len(replay.exit_fills) == 1
+    emit(5600, depth(107, 107, 106, MINUTE+5600,
+                     bid=[[102.5, 0], [104., 150]], ask=[[102.52, 0], [104.02, 90]]))
+    assert [f["reason"] for f in replay.exit_fills] == ["SCALE_OUT", "TARGET"]
+    assert replay.trades[0]["net_pnl"] == pytest.approx(replay.balance-100)
+
+
+def paired_tape():
+    def row(kind, ms, data):
+        return dict(kind=kind, received_ms=MINUTE+ms, symbol=SYMBOL, data=data)
+
+    return [
+        row("candles", 0, candle_rows()),
+        row("event", 0, trade(1, MINUTE)),
+        row("snapshot", 4500, snapshot()),
+        row("event", 4900, depth(100, 101, 99, MINUTE+4900)),
+        row("event", 5000, trade(2, MINUTE+5000, qty=60)),
+        row("event", 5080, depth(102, 102, 101, MINUTE+5080, bid=[[101.99, 400]])),
+        row("event", 5090, dict(e="kline", E=MINUTE+5090, s=SYMBOL,
+                                k=dict(t=MINUTE, i="1m", x=False, o=100., h=102., l=100., c=102., v=500.))),
+        row("event", 5250, depth(103, 103, 102, MINUTE+5250)),
+        row("event", 5360, depth(104, 104, 103, MINUTE+5360)),
+        row("funding_settlement", 5400, dict(settled_ms=MINUTE+5400, rate=.0001, mark=102)),
+        row("event", 5500, depth(105, 105, 104, MINUTE+5500,
+                                 [[101.99, 0], [105, 400]], [[102.01, 0], [105.02, 90]])),
+        row("event", 5600, depth(106, 106, 105, MINUTE+5600,
+                                 [[105, 0], [103, 400]], [[105.02, 0], [103.02, 90]])),
+    ]
+
+
+def test_costed_comparison_uses_same_tape_and_funding_but_never_promotes():
+    from evaluation.costed import compare
+    report = compare(paired_tape(), Config(), {SYMBOL: Instrument(.001, 5.)}, equity=1000)
+    assert report["source_events"] == len(paired_tape())
+    assert report["promotion_eligible"] is False
+    assert report["champion"]["funding_settlements"] == report["challenger"]["funding_settlements"] == 1
+    assert report["champion"]["metrics"]["trades"] == report["challenger"]["metrics"]["trades"] == 1
+    assert report["champion"]["by_strategy"]["champion_proxy"]["count"] == 1
+    assert report["challenger"]["by_strategy"]["cascade_v2"]["count"] == 1
+
+
+def test_sample_builder_freezes_model_inputs_before_fills_and_censors_reset():
+    from models.build_samples import SampleBuilder
+    from models.meta import FEATURES
+    tape = paired_tape()
+    engine = Engine(Config(), {SYMBOL: Instrument(.001, 5.)})
+    builder = SampleBuilder(Replay(engine, equity=1000), 2000)
+    samples = [sample for row in tape if (sample := builder.apply(row)) is not None]
+    sample, = samples
+    assert sample.label == "target"
+    assert sample.decision_ms == MINUTE+5080
+    assert sample.label_end_ms == MINUTE+5500
+    assert len(sample.row) == len(FEATURES)
+    builder = SampleBuilder(Replay(engine, equity=1000), 2000)
+    for row in tape[:8]:
+        assert builder.apply(row) is None
+    assert builder.active
+    assert builder.apply(dict(kind="reset_depth", symbol=SYMBOL, received_ms=MINUTE+5300, data={})) is None
+    assert builder.censored == 1
+    assert not builder.active
+
+
+def test_delayed_fill_rechecks_reduced_risk_budget():
+    replay = Replay(Engine(Config(), {SYMBOL: Instrument(.001, 5.)}))
+    replay.states[SYMBOL] = ready_state()
+
+    def emit(ms, data):
+        replay.apply(dict(received_ms=MINUTE+ms, symbol=SYMBOL, kind="event", data=data))
+
+    emit(5001, trade(4, MINUTE+5001, qty=1))
+    emit(5080, depth(103, 103, 102, MINUTE+5080))
+    assert replay.pending
+    replay.balance = 97.
+    emit(5181, depth(104, 104, 103, MINUTE+5181))
+    assert not replay.open
+    assert any(item["reason"] == "RISK_BUDGET_CHANGED_AT_FILL" for item in replay.signals)
+
+
+def test_replay_time_stop_waits_for_thesis_loss(monkeypatch):
+    from research.replay import Experiment
+    replay = Replay(Engine(Config(), {SYMBOL: Instrument(.001, 5.)}),
+                    experiment=Experiment(thesis_timeout_ms=100))
+    state = ready_state()
+    replay.states[SYMBOL] = state
+    features = state.features
+
+    def changing_features(now, cfg, btc=None):
+        observed = features(now, cfg, btc)
+        if observed is not None and now >= MINUTE+5400:
+            return replace(observed, trend=0.)
+        return observed
+
+    monkeypatch.setattr(state, "features", changing_features)
+
+    def emit(ms, data):
+        replay.apply(dict(received_ms=MINUTE+ms, symbol=SYMBOL, kind="event", data=data))
+
+    emit(5001, trade(4, MINUTE+5001, qty=1))
+    emit(5080, depth(103, 103, 102, MINUTE+5080))
+    emit(5181, depth(104, 104, 103, MINUTE+5181))
+    emit(5320, depth(105, 105, 104, MINUTE+5320))
+    assert replay.open
+    emit(5400, depth(106, 106, 105, MINUTE+5400))
+    assert replay.trades[0]["reason"] == "TIME_STOP"

@@ -10,3 +10,12 @@ python -m models.train samples.jsonl model.json --version candidate-1 \
 ```
 
 يقصّ split التداخل بين نهاية نتيجة التدريب وبداية calibration/test، ويخرج Brier وreliability bins من البيانات المحجوزة. `walk_forward` يكرر تقسيمًا أماميًا على حدود يحددها الباحث. التدريب لا يكتب موافقة. يتطلب تحميل النموذج في Replay ملف موافقة مع `artifact_sha256` و`config_sha256` و`approved_by` و`scope: shadow`. الرجوع يكون باختيار الملف والموافقة السابقين. تدريب LightGBM/CatBoost ومقارنتهما والنموذج المعتمد معلقة على بيانات كافية.
+
+لبناء عينات Meta-label من ملف سوق قابل لإعادة التشغيل:
+
+```bash
+python -m models.build_samples runtime/research/events.jsonl runtime/research/filters.json \
+  runtime/research/samples.jsonl --horizon-ms 60000
+```
+
+تُجمّد الميزات عند القرار وتُقبل عينة فقط بعد تعبئة افتراضية في Replay. يبدأ مسار تسمية الهدف والوقف الثابتين بعد التعبئة، ويستخدم أسعارًا قابلة للتنفيذ على كمية الصفقة. تُستبعد المسارات التي لم تكتمل بسبب فجوة أو إعادة بناء للدفتر أو نهاية التسجيل. يجب أن تبقى العينة الموسومة وتسلسل الأسعار ومخرجات النموذج في بيئة البحث حتى اجتياز المقارنة ومراجعة الترقية.

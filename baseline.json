@@ -1,0 +1,304 @@
+{
+  "name": "Khaled Cascade Hunter",
+  "version": "4.1.1",
+  "status": "offline_validated_pending_demo_soak",
+  "python": ">=3.11",
+  "primary_entrypoint": "run_demo.py",
+  "initial_balance_usdt": 100,
+  "paper_position_notional_usdt": 100,
+  "position_basis": "current_equity",
+  "leverage": 10,
+  "margin_fraction_per_position": 0.1,
+  "max_concurrent_positions": 4,
+  "stop_basis": "fill_price",
+  "cascade_threshold": 0.012,
+  "volume_spike": 3.5,
+  "orderbook_imbalance_threshold": 0.35,
+  "max_symbols": 40,
+  "universe_refresh_sec": 600,
+  "min_quote_volume_usdt": 15000000,
+  "cooldown_sec": 8,
+  "fee_rate": 0.0005,
+  "tp_sl": {
+    "atr_stop_mult": 1.5,
+    "atr_tp_mult": 2.5,
+    "min_stop_pct": 0.008,
+    "min_rr": 1.5,
+    "mmr": 0.004,
+    "liq_safety_margin": 0.003,
+    "max_equity_risk_pct": 0.025
+  },
+  "atr": {
+    "period": 14,
+    "fallback_atr_pct": 0.004
+  },
+  "exit": {
+    "be_trigger_pct": 0.015,
+    "be_offset_pct": 0.001,
+    "trail_enabled": true,
+    "trail_atr_mult": 1.2,
+    "policy": "hard_stop_trailing",
+    "hard_stop_pct": 0.08,
+    "trail_arm_pct": 0.015,
+    "trail_distance_pct": 0.006,
+    "allow_partial_close": false,
+    "check_sec": 1
+  },
+  "updated_on": "2026-11-06",
+  "dashboard": {
+    "bot_id": "khaled",
+    "url": "https://coamowlsyuqbxngijxsu.supabase.co/functions/v1/cascade-dashboard",
+    "upload_sec": 10
+  },
+  "exchange": {
+    "mode": "paper",
+    "base_url_testnet": "https://demo-fapi.binance.com",
+    "base_url_mainnet": "https://fapi.binance.com",
+    "ws_url_testnet": "wss://demo-fstream.binance.com/market/stream",
+    "ws_url_mainnet": "wss://fstream.binance.com/market/stream",
+    "http_timeout_sec": 10,
+    "recv_window_ms": 5000,
+    "rate_per_sec": 5,
+    "rate_burst": 10,
+    "max_retries": 5,
+    "backoff_base": 2.0,
+    "backoff_jitter_sec": 1.0,
+    "max_backoff_sec": 120,
+    "order_attempts": 3,
+    "order_poll_attempts": 3,
+    "order_poll_sec": 1,
+    "time_sync_interval_sec": 60,
+    "client_id_prefix": "kh_",
+    "working_type": "CONTRACT_PRICE",
+    "state_dir": "runtime",
+    "credentials_rotation_days": 90,
+    "http_weights": {
+      "default": 1,
+      "/fapi/v3/account": 5,
+      "/fapi/v3/positionRisk": 5,
+      "/fapi/v1/openOrders": 40,
+      "/fapi/v1/ticker/24hr": 40,
+      "/fapi/v1/exchangeInfo": 1,
+      "/fapi/v1/klines": 2,
+      "/fapi/v1/depth": 2,
+      "/fapi/v1/openAlgoOrders": 40,
+      "/fapi/v1/userTrades": 5,
+      "/fapi/v1/accountConfig": 5
+    },
+    "weight_per_minute": 1800,
+    "orders_per_10sec": 200,
+    "orders_per_minute": 1000,
+    "state_filename": "state.json",
+    "trade_page_limit": 1000,
+    "fill_qty_tolerance_pct": 1e-08,
+    "non_incident_error_codes": [
+      -4046,
+      -2011,
+      -2013
+    ],
+    "account_refresh_sec": 5,
+    "leverage_policy": "fixed",
+    "leverage_rejection_codes": [
+      -4028,
+      -2027,
+      -4202,
+      -4209
+    ],
+    "trade_max_pages": 20,
+    "session_guard_filename": "session_guard.json",
+    "protection_attempts": 3,
+    "protection_backoff_sec": 0.5,
+    "retirement_attempts": 3,
+    "retirement_backoff_sec": 0.5,
+    "symbol_close_attempts": 3,
+    "symbol_close_backoff_sec": 0.5,
+    "regular_stop_fallback": true,
+    "regular_stop_unsupported_codes": [
+      -4120,
+      -1116
+    ],
+    "protection_rejection_codes": [
+      -2021,
+      -4120,
+      -1116,
+      -1106,
+      -1111,
+      -4003,
+      -4005
+    ],
+    "management_recovery_interval_sec": 5,
+    "management_entry_cooldown_sec": 600,
+    "management_filename": "management_faults.json"
+  },
+  "kill_switch": {
+    "daily_dd_limit_pct": 0.05,
+    "max_consecutive_losses": 4,
+    "ws_timeout_sec": 30,
+    "api_error_limit": 5,
+    "spread_spike_mult": 9.0,
+    "api_window_sec": 60,
+    "api_warning_count": 3,
+    "ws_warning_sec": 10,
+    "monitor_interval_sec": 1,
+    "spread_window": 50,
+    "spread_warmup": 20,
+    "flatten_attempts": 3,
+    "flatten_retry_sec": 2,
+    "spread_poll_sec": 5,
+    "book_depth": 20,
+    "spread_block_sec": 90,
+    "consecutive_loss_pause_sec": 600,
+    "daily_drawdown_action": "block_entries",
+    "mode": "observe",
+    "mode_per_environment": {
+      "paper": "observe",
+      "demo": "observe",
+      "testnet": "soft",
+      "mainnet": "hard"
+    },
+    "thresholds": {
+      "observe": {
+        "ws_offline_sec": 300,
+        "api_errors_per_min": 30,
+        "spread_spike_mult": 15.0,
+        "daily_dd_pct": 0.15,
+        "consecutive_losses": 10,
+        "cooldown_sec": 600
+      },
+      "soft": {
+        "ws_offline_sec": 120,
+        "api_errors_per_min": 15,
+        "spread_spike_mult": 10.0,
+        "daily_dd_pct": 0.1,
+        "consecutive_losses": 6,
+        "cooldown_sec": 600
+      },
+      "hard": {
+        "ws_offline_sec": 60,
+        "api_errors_per_min": 10,
+        "spread_spike_mult": 8.0,
+        "daily_dd_pct": 0.05,
+        "consecutive_losses": 4,
+        "cooldown_sec": 600
+      }
+    }
+  },
+  "exposure": {
+    "basis": "margin",
+    "max_concurrent": 4,
+    "max_long_exposure_pct": 0.45,
+    "max_short_exposure_pct": 0.45,
+    "max_gross_exposure_pct": 0.45,
+    "max_correlated_same_direction": 4,
+    "leverage": 10,
+    "correlated_groups": [
+      [
+        "BTCUSDT",
+        "ETHUSDT",
+        "SOLUSDT",
+        "BNBUSDT"
+      ],
+      [
+        "DOGEUSDT",
+        "SHIBUSDT",
+        "PEPEUSDT"
+      ]
+    ]
+  },
+  "funding": {
+    "warning_minutes": 5,
+    "close_threshold": 0.0005,
+    "poll_sec": 60,
+    "block_new_entries": true,
+    "close_positions": false
+  },
+  "slippage": {
+    "alert_bps": 20.0,
+    "window": 50,
+    "max_expected_entry_bps": 30.0,
+    "alert_cooldown_sec": 600
+  },
+  "alerts": {
+    "telegram_enabled": true,
+    "daily_report_hour_utc": 0,
+    "base_url": "https://api.telegram.org",
+    "http_timeout_sec": 5,
+    "queue_size": 1000,
+    "max_attempts": 3,
+    "retry_sec": 2,
+    "shutdown_timeout_sec": 30,
+    "message_max_chars": 3500
+  },
+  "time_stop": {
+    "enabled": false,
+    "minutes": 45,
+    "min_profit_pct": 0.002
+  },
+  "recon": {
+    "interval_sec": 60,
+    "auto_close_orphans": true,
+    "size_tolerance_pct": 0.01,
+    "entry_tolerance_pct": 1e-06
+  },
+  "rollout": {
+    "testnet_days_required": 14,
+    "continuous_days_required": 7,
+    "min_closed_trades": 100,
+    "max_mean_entry_slippage_bps": 5,
+    "min_sharpe": 0.8,
+    "max_drawdown_pct": 0.15,
+    "max_stuck_fraction": 0.1,
+    "stuck_minutes": 60,
+    "initial_mainnet_fraction": 0.01,
+    "scale_review_days": 14,
+    "evidence_file": "runtime/testnet_evidence.json",
+    "approval_file": "runtime/mainnet_approval.json",
+    "max_monitor_gap_sec": 120,
+    "equity_sample_sec": 60,
+    "sharpe_periods_per_year": 525600,
+    "sharpe_window": 100,
+    "operator_policy_file": "runtime/{mode}/operator_policy.json",
+    "mainnet_evidence_file": "runtime/mainnet_evidence.json",
+    "scale_state_file": "runtime/mainnet_scale_state.json",
+    "scale_approval_file": "runtime/mainnet_scale_approval.json",
+    "scale_factor": 2,
+    "max_mainnet_fraction": 1.0
+  },
+  "demo": {
+    "state_filename": "state.json",
+    "preflight_symbol": "BTCUSDT"
+  },
+  "same_symbol_loss_cooldown": 600,
+  "process": {
+    "watchdog_check_interval_sec": 10,
+    "component_timeout_sec": {
+      "ws": 120,
+      "scanner": 120,
+      "order_manager": 120,
+      "reconciler": 300
+    },
+    "max_memory_gb": 1.5,
+    "max_fds": 10000
+  },
+  "ws": {
+    "hard_offline_sec": 300,
+    "ping_interval_sec": 20,
+    "ping_timeout_sec": 10,
+    "reconnect_max_delay_sec": 60
+  },
+  "circuit_breaker": {
+    "failure_threshold": 30,
+    "cooldown_sec": 30,
+    "request_budget_sec": 30
+  },
+  "persistence": {
+    "wal_enabled": true,
+    "state_save_interval_sec": 10,
+    "startup_reconcile_required": true
+  },
+  "health": {
+    "enabled": true,
+    "port": 8080,
+    "host": "127.0.0.1"
+  }
+}

@@ -1,0 +1,7 @@
+ccxt>=4.5,<5
+pandas>=2.2,<3
+numpy>=1.26,<3
+aiohttp>=3.10,<4
+httpx[socks]>=0.28,<1
+cryptography>=43,<51
+psutil>=6,<8

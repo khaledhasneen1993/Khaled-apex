@@ -1,0 +1,8 @@
+{
+  "mode": "testnet",
+  "dedicated_account": false,
+  "futures_only": false,
+  "withdrawals_disabled": false,
+  "ip_whitelist_verified": false,
+  "last_rotated_at": null
+}

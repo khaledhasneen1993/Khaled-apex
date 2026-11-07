@@ -1,0 +1,18 @@
+[Unit]
+Description=Khaled Independent Health Watcher
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=khaled
+WorkingDirectory=/home/khaled/Khaled
+EnvironmentFile=/home/khaled/Khaled/.env
+ExecStart=/home/khaled/Khaled/.venv/bin/python -u tools/watch_health.py
+Restart=always
+RestartSec=5
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

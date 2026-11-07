@@ -1,0 +1,21 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.log
+paper_state*.json
+paper_state*.json.tmp
+dashboard-config*.json
+.env
+.env.*
+.pytest_cache/
+runtime/
+journal/*.log
+*.lock
+.runtime/
+.venv-dashboard/
+.dashboard.env
+
+# The template is public; actual connection settings stay local.
+!.env.example
+
+.venv-paper-dashboard/

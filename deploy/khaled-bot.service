@@ -1,0 +1,27 @@
+[Unit]
+Description=Khaled Demo Trading Bot
+After=network-online.target
+Wants=network-online.target
+# Restart indefinitely through prolonged network outages.
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=khaled
+WorkingDirectory=/home/khaled/Khaled
+EnvironmentFile=/home/khaled/Khaled/.env
+ExecStart=/home/khaled/Khaled/.venv/bin/python -u run_demo.py
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+KillSignal=SIGTERM
+MemoryMax=2G
+CPUQuota=200%
+LimitNOFILE=65536
+UMask=0077
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=khaled-bot
+
+[Install]
+WantedBy=multi-user.target
